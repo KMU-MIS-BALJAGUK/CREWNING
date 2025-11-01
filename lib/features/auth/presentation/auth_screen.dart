@@ -48,18 +48,11 @@ class _AuthScreenState extends State<AuthScreen> {
           password: password,
         );
       } else {
-        final response = await supabase.auth.signUp(
+        await supabase.auth.signUp(
           email: email,
           password: password,
           data: {'name': name},
         );
-
-        if (response.user != null) {
-          await supabase.from('user').upsert({
-            'email': email,
-            'name': name,
-          }, onConflict: 'email');
-        }
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
