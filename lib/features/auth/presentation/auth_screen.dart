@@ -51,19 +51,14 @@ class _AuthScreenState extends State<AuthScreen> {
         final response = await supabase.auth.signUp(
           email: email,
           password: password,
-          data: {
-            'name': name,
-          },
+          data: {'name': name},
         );
 
         if (response.user != null) {
-          await supabase.from('user').upsert(
-            {
-              'email': email,
-              'name': name,
-            },
-            onConflict: 'email',
-          );
+          await supabase.from('user').upsert({
+            'email': email,
+            'name': name,
+          }, onConflict: 'email');
         }
 
         if (!mounted) return;
@@ -75,14 +70,14 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } on AuthException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('요청을 처리하지 못했습니다: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('요청을 처리하지 못했습니다: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -150,9 +145,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ],
                           TextFormField(
                             controller: _emailController,
-                            decoration: const InputDecoration(
-                              labelText: '이메일',
-                            ),
+                            decoration: const InputDecoration(labelText: '이메일'),
                             keyboardType: TextInputType.emailAddress,
                             textInputAction: _isLoginMode
                                 ? TextInputAction.done
@@ -200,7 +193,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : Text(_isLoginMode ? '로그인' : '회원가입'),
                             ),
@@ -209,7 +204,9 @@ class _AuthScreenState extends State<AuthScreen> {
                           TextButton(
                             onPressed: _isSubmitting ? null : _toggleMode,
                             child: Text(
-                              _isLoginMode ? '처음이신가요? 회원가입' : '이미 계정이 있으신가요? 로그인',
+                              _isLoginMode
+                                  ? '처음이신가요? 회원가입'
+                                  : '이미 계정이 있으신가요? 로그인',
                             ),
                           ),
                         ],

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:crewning/features/crew/presentation/crew_screen.dart';
-import 'package:crewning/features/home/presentation/home_screen.dart';
 import 'package:crewning/features/profile/presentation/my_page_screen.dart';
+import 'package:crewning/features/record/presentation/record_screen.dart';
+import 'package:crewning/features/status/presentation/status_screen.dart';
 
 class CrewningHome extends StatefulWidget {
   const CrewningHome({super.key});
@@ -14,7 +15,7 @@ class CrewningHome extends StatefulWidget {
 class _CrewningHomeState extends State<CrewningHome> {
   int _selectedIndex = 0;
 
-  static const _titles = ['홈', '크루', '마이페이지'];
+  static const _titles = ['점령 지도', '기록', '크루', '마이페이지'];
 
   void _onItemTapped(int index) {
     setState(() {
@@ -25,14 +26,12 @@ class _CrewningHomeState extends State<CrewningHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_titles[_selectedIndex]),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: Text(_titles[_selectedIndex]), centerTitle: true),
       body: IndexedStack(
         index: _selectedIndex,
         children: const [
-          HomeScreen(),
+          StatusScreen(),
+          RecordScreen(),
           CrewScreen(),
           MyPageScreen(),
         ],
@@ -40,10 +39,17 @@ class _CrewningHomeState extends State<CrewningHome> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Theme.of(context).colorScheme.primary,
+        unselectedItemColor: Theme.of(context).colorScheme.onSurfaceVariant,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            label: '홈',
+            icon: Icon(Icons.map_outlined),
+            label: '점령 지도',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt_outlined),
+            label: '기록',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.groups_outlined),
