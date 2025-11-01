@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:crewning/features/crew/presentation/crew_screen.dart';
 import 'package:crewning/features/profile/presentation/my_page_screen.dart';
-import 'package:crewning/features/record/presentation/record_screen.dart';
+import 'package:crewning/features/running/presentation/running_screen.dart';
 import 'package:crewning/features/status/presentation/status_screen.dart';
 
 class CrewningHome extends StatefulWidget {
@@ -31,7 +31,7 @@ class _CrewningHomeState extends State<CrewningHome> {
         index: _selectedIndex,
         children: const [
           StatusScreen(),
-          RecordScreen(),
+          RunningScreen(),
           CrewScreen(),
           MyPageScreen(),
         ],
