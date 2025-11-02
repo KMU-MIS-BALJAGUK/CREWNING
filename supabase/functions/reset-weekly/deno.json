@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "reset-weekly": {
+      "verifyJwt": false
+    }
+  }
+}

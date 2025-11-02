@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../crew/data/crew_repository.dart';
@@ -242,51 +243,56 @@ class _CrewScreenState extends State<CrewScreen>
               );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('크루'),
-        centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '위클리 랭킹'),
-            Tab(text: '전체 랭킹'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          _RankingTabView(
-            controller: _weeklyController,
-            entries: _weeklyEntries,
-            loading: _weeklyLoading,
-            hasMore: _weeklyHasMore,
-            myCrew: _myCrewSummary,
-            isWeekly: true,
-            onRefresh: () async {
-              await Future.wait([
-                _loadWeekly(refresh: true),
-                _loadSummary(),
-              ]);
-            },
-            onTapCrew: _openCrewDetail,
-            header: myCrewCard,
+          Material(
+            color: Theme.of(context).colorScheme.surface,
+            child: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: '위클리 랭킹'),
+                Tab(text: '전체 랭킹'),
+              ],
+            ),
           ),
-          _RankingTabView(
-            controller: _totalController,
-            entries: _totalEntries,
-            loading: _totalLoading,
-            hasMore: _totalHasMore,
-            myCrew: _myCrewSummary,
-            isWeekly: false,
-            onRefresh: () async {
-              await Future.wait([
-                _loadTotal(refresh: true),
-                _loadSummary(),
-              ]);
-            },
-            onTapCrew: _openCrewDetail,
-            header: myCrewCard,
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _RankingTabView(
+                  controller: _weeklyController,
+                  entries: _weeklyEntries,
+                  loading: _weeklyLoading,
+                  hasMore: _weeklyHasMore,
+                  myCrew: _myCrewSummary,
+                  isWeekly: true,
+                  onRefresh: () async {
+                    await Future.wait([
+                      _loadWeekly(refresh: true),
+                      _loadSummary(),
+                    ]);
+                  },
+                  onTapCrew: _openCrewDetail,
+                  header: myCrewCard,
+                ),
+                _RankingTabView(
+                  controller: _totalController,
+                  entries: _totalEntries,
+                  loading: _totalLoading,
+                  hasMore: _totalHasMore,
+                  myCrew: _myCrewSummary,
+                  isWeekly: false,
+                  onRefresh: () async {
+                    await Future.wait([
+                      _loadTotal(refresh: true),
+                      _loadSummary(),
+                    ]);
+                  },
+                  onTapCrew: _openCrewDetail,
+                  header: myCrewCard,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -574,14 +580,35 @@ Future<CrewSummary?> showCrewCreateDialog(
   Uint8List? previewBytes;
   bool submitting = false;
 
-  Future<void> pickImage(StateSetter setState) async {
+  Future<void> pickImage(StateSetter setState, BuildContext dialogContext) async {
     final file = await picker.pickImage(source: ImageSource.gallery);
     if (file != null) {
-      final bytes = await file.readAsBytes();
-      setState(() {
-        selectedFile = file;
-        previewBytes = bytes;
-      });
+      final theme = Theme.of(dialogContext);
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: file.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: '크루 로고 자르기',
+            toolbarColor: theme.colorScheme.surface,
+            toolbarWidgetColor: theme.colorScheme.primary,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: '크루 로고 자르기',
+            aspectRatioLockEnabled: true,
+            aspectRatioPickerButtonHidden: true,
+          ),
+        ],
+      );
+      if (cropped != null) {
+        final bytes = await cropped.readAsBytes();
+        setState(() {
+          selectedFile = XFile(cropped.path);
+          previewBytes = bytes;
+        });
+      }
     }
   }
 
@@ -594,198 +621,212 @@ Future<CrewSummary?> showCrewCreateDialog(
           final isValid = crewName.trim().length >= 2 &&
               crewName.trim().length <= 10 &&
               selectedAreaIds.isNotEmpty;
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Material(
-                borderRadius: BorderRadius.circular(24),
-                clipBehavior: Clip.antiAlias,
-                child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            '크루 생성',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+          return AnimatedPadding(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.only(bottom: bottomInset),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 340),
+                child: Material(
+                  borderRadius: BorderRadius.circular(20),
+                  clipBehavior: Clip.antiAlias,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 24,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              '크루 생성',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: submitting
-                                ? null
-                                : () => Navigator.of(context).pop(),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        enabled: !submitting,
-                        decoration: const InputDecoration(
-                          labelText: '크루명 (2~10자)',
-                        ),
-                        maxLength: 10,
-                        onChanged: (value) {
-                          setState(() {
-                            crewName = value;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '크루 로고',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: submitting ? null : () => pickImage(setState),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            height: 140,
-                            color: Colors.grey.shade200,
-                            alignment: Alignment.center,
-                            child: previewBytes != null
-                                ? Image.memory(
-                                    previewBytes!,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                  )
-                                : const Text('이미지 선택'),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        '크루 활동 지역 (최대 3개)',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: areas.map((area) {
-                          final selected = selectedAreaIds.contains(area.areaId);
-                          return ChoiceChip(
-                            label: Text(area.name),
-                            selected: selected,
-                            onSelected: submitting
-                                ? null
-                                : (value) {
-                                    setState(() {
-                                      if (value) {
-                                        if (selectedAreaIds.length < 3) {
-                                          selectedAreaIds.add(area.areaId);
-                                        }
-                                      } else {
-                                        selectedAreaIds.remove(area.areaId);
-                                      }
-                                    });
-                                  },
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 20),
-                      TextField(
-                        enabled: !submitting,
-                        maxLines: null,
-                        maxLength: 100,
-                        decoration: const InputDecoration(
-                          labelText: '크루 한줄 소개 (선택)',
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            introduction = value.isEmpty ? null : value;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
+                            IconButton(
+                              icon: const Icon(Icons.close),
                               onPressed: submitting
                                   ? null
                                   : () => Navigator.of(context).pop(),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
-                              ),
-                              child: const Text('취소'),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          enabled: !submitting,
+                          textInputAction: TextInputAction.done,
+                          decoration: const InputDecoration(
+                            labelText: '크루명 (2~10자)',
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: !isValid || submitting
-                                  ? null
-                                  : () async {
-                                      setState(() {
-                                        submitting = true;
-                                      });
-                                      try {
-                                        String? logoUrl;
-                                        if (selectedFile != null) {
-                                          logoUrl = await repository
-                                              .uploadCrewLogo(selectedFile!);
-                                        }
-                                        final summary =
-                                            await repository.createCrew(
-                                          crewName: crewName.trim(),
-                                          areaIds: (selectedAreaIds.toList()
-                                            ..sort()),
-                                          introduction: introduction,
-                                          logoUrl: logoUrl,
-                                        );
-                                        if (context.mounted) {
-                                          Navigator.of(context).pop(summary);
-                                        }
-                                      } catch (error) {
-                                        if (!context.mounted) return;
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content:
-                                                Text(error.toString()),
-                                          ),
-                                        );
-                                      } finally {
-                                        if (context.mounted) {
-                                          setState(() {
-                                            submitting = false;
-                                          });
-                                        }
-                                      }
-                                    },
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(48),
-                                backgroundColor: isValid
-                                    ? Theme.of(context)
-                                        .colorScheme
-                                        .primary
-                                    : Colors.grey,
-                              ),
-                              child: submitting
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
+                          maxLength: 10,
+                          onChanged: (value) {
+                            setState(() {
+                              crewName = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '크루 로고',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: submitting
+                              ? null
+                              : () => pickImage(setState, context),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              height: 120,
+                              color: Colors.grey.shade200,
+                              alignment: Alignment.center,
+                              child: previewBytes != null
+                                  ? Image.memory(
+                                      previewBytes!,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
                                     )
-                                  : const Text('확인'),
+                                  : const Text('이미지 선택'),
                             ),
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          '크루 활동 지역 (최대 3개)',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: areas.map((area) {
+                            final selected =
+                                selectedAreaIds.contains(area.areaId);
+                            return ChoiceChip(
+                              label: Text(area.name),
+                              selected: selected,
+                              onSelected: submitting
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        if (value) {
+                                          if (selectedAreaIds.length < 3) {
+                                            selectedAreaIds.add(area.areaId);
+                                          }
+                                        } else {
+                                          selectedAreaIds.remove(area.areaId);
+                                        }
+                                      });
+                                    },
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 20),
+                        TextField(
+                          enabled: !submitting,
+                          maxLines: null,
+                          maxLength: 100,
+                          textInputAction: TextInputAction.done,
+                          decoration: const InputDecoration(
+                            labelText: '크루 한줄 소개 (선택)',
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              introduction = value.isEmpty ? null : value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: submitting
+                                    ? null
+                                    : () => Navigator.of(context).pop(),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                ),
+                                child: const Text('취소'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: !isValid || submitting
+                                    ? null
+                                    : () async {
+                                        setState(() {
+                                          submitting = true;
+                                        });
+                                        try {
+                                          String? logoUrl;
+                                          if (selectedFile != null) {
+                                            logoUrl = await repository
+                                                .uploadCrewLogo(selectedFile!);
+                                          }
+                                          final summary =
+                                              await repository.createCrew(
+                                            crewName: crewName.trim(),
+                                            areaIds: (selectedAreaIds.toList()
+                                              ..sort()),
+                                            introduction: introduction,
+                                            logoUrl: logoUrl,
+                                          );
+                                          if (context.mounted) {
+                                            Navigator.of(context)
+                                                .pop(summary);
+                                          }
+                                        } catch (error) {
+                                          if (!context.mounted) return;
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content:
+                                                  Text(error.toString()),
+                                            ),
+                                          );
+                                        } finally {
+                                          if (context.mounted) {
+                                            setState(() {
+                                              submitting = false;
+                                            });
+                                          }
+                                        }
+                                      },
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                  backgroundColor: isValid
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                      : Colors.grey,
+                                ),
+                                child: submitting
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('확인'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
