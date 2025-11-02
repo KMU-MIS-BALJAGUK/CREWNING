@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/running_models.dart';
@@ -62,11 +64,17 @@ class RunningRepository {
   }) async {
     final userId = await _resolveUserId();
 
+    final safeDistance = distanceKm.isFinite ? distanceKm : 0.0;
+    final safeCalories = math.min(math.max(calories, 0), 1000000);
+    final safePace = paceMinPerKm.isFinite
+        ? paceMinPerKm.clamp(0, 999.99).toDouble()
+        : 0.0;
+
     final payload = {
       'user_id': userId,
-      'distance': distanceKm,
-      'calories': calories,
-      'pace': paceMinPerKm,
+      'distance': safeDistance,
+      'calories': safeCalories,
+      'pace': safePace,
       'elapsed_seconds': elapsed.inSeconds,
       'start_time': start.toIso8601String(),
       'end_time': end.toIso8601String(),
