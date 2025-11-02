@@ -99,47 +99,52 @@ class _RunningScreenState extends State<RunningScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(child: Container(color: Colors.grey.shade300)),
-            Positioned.fill(
-              child: _kakaoKey.isEmpty
-                  ? const Center(child: Text('카카오 맵 키가 설정되지 않았습니다.'))
-                  : KakaoMapView(
-                      kakaoJavascriptKey: _kakaoKey,
-                      path: _controller.currentPath,
-                      focus: _controller.currentLocation,
-                      interactive: true,
+        child: _controller.currentLocation == null
+            ? const Center(child: CircularProgressIndicator())
+            : Stack(
+                children: [
+                  Positioned.fill(
+                    child: Container(color: Colors.grey.shade300),
+                  ),
+                  Positioned.fill(
+                    child: _kakaoKey.isEmpty
+                        ? const Center(child: Text('카카오 맵 키가 설정되지 않았습니다.'))
+                        : KakaoMapView(
+                            kakaoJavascriptKey: _kakaoKey,
+                            path: _controller.currentPath,
+                            focus: _controller.currentLocation,
+                            interactive: true,
+                            fitPathToBounds: false,
+                          ),
+                  ),
+                  Positioned(
+                    top: 20,
+                    left: 20,
+                    child: _RecordsButton(onTap: _openRecordsSheet),
+                  ),
+                  if (_controller.phase == RunningPhase.running ||
+                      _controller.phase == RunningPhase.paused)
+                    Positioned(
+                      top: 120,
+                      left: 20,
+                      right: 20,
+                      child: RunningStatsPanel(
+                        distanceKm: _controller.distanceKm,
+                        pace: _controller.paceMinPerKm,
+                        duration: _controller.elapsed,
+                        calories: _controller.calories,
+                      ),
                     ),
-            ),
-            Positioned(
-              top: 20,
-              left: 20,
-              child: _RecordsButton(onTap: _openRecordsSheet),
-            ),
-            if (_controller.phase == RunningPhase.running ||
-                _controller.phase == RunningPhase.paused)
-              Positioned(
-                top: 120,
-                left: 20,
-                right: 20,
-                child: RunningStatsPanel(
-                  distanceKm: _controller.distanceKm,
-                  pace: _controller.paceMinPerKm,
-                  duration: _controller.elapsed,
-                  calories: _controller.calories,
-                ),
+                  Positioned(
+                    bottom: 40,
+                    left: 0,
+                    right: 0,
+                    child: _buildCenterControls(),
+                  ),
+                  if (_controller.phase == RunningPhase.countdown)
+                    _CountdownOverlay(value: _controller.countdownValue),
+                ],
               ),
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: _buildCenterControls(),
-            ),
-            if (_controller.phase == RunningPhase.countdown)
-              _CountdownOverlay(value: _controller.countdownValue),
-          ],
-        ),
       ),
     );
   }

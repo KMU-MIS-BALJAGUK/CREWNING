@@ -18,6 +18,10 @@ class RunningRecordDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // ignore: avoid_print
+    print(
+      '[RunningRecordDetailView] recordId=${record.recordId} pathLength=${record.path.length}',
+    );
     return Scaffold(
       appBar: AppBar(title: const Text('러닝 기록')),
       body: Column(
