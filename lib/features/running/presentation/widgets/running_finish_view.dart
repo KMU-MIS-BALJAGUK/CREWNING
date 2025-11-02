@@ -20,9 +20,15 @@ class RunningFinishView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final path = controller.currentPath;
     final summary = controller.pendingRecord;
+    final path = summary?.path.isNotEmpty == true
+        ? summary!.path
+        : controller.currentPath;
 
+    // ignore: avoid_print
+    print(
+      '[RunningFinishView] summaryPath=${summary?.path.length ?? 0}, controllerPath=${controller.currentPath.length}',
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -34,6 +40,7 @@ class RunningFinishView extends StatelessWidget {
               path: path,
               focus: path.lastOrNull,
               interactive: true,
+              hideCurrentMarker: true,
             ),
           ),
         ),

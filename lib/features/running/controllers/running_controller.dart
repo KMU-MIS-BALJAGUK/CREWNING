@@ -96,6 +96,7 @@ class RunningController extends ChangeNotifier {
     phase = RunningPhase.paused;
     await _stopTracking();
     notifyListeners();
+    _triggerUiUpdate(force: true);
   }
 
   Future<void> resumeRun() async {
@@ -285,19 +286,19 @@ class RunningController extends ChangeNotifier {
 
     _path.add(point);
     _updateDerivedMetrics();
-    notifyListeners();
+    _triggerUiUpdate();
   }
 
   void _updateElapsed() {
     if (_startTime == null) return;
     _elapsed = DateTime.now().difference(_startTime!);
     _updateDerivedMetrics();
-    notifyListeners();
+    _triggerUiUpdate();
   }
 
   void _updateDerivedMetrics() {
     _distanceMeters = max(_distanceMeters, 0);
-    if (distanceKm < 0.05) {
+    if (distanceKm < 0.01) {
       _paceMinPerKm = 0;
     } else {
       final km = distanceKm;
@@ -329,5 +330,9 @@ class RunningController extends ChangeNotifier {
     _elapsedTimer?.cancel();
     _positionSubscription?.cancel();
     super.dispose();
+  }
+
+  void _triggerUiUpdate({bool force = false}) {
+    notifyListeners();
   }
 }

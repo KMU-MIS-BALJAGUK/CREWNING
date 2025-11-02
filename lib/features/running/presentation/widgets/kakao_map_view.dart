@@ -12,12 +12,16 @@ class KakaoMapView extends StatefulWidget {
     required this.path,
     this.focus,
     this.interactive = false,
+    this.hideCurrentMarker = false,
+    this.fitPathToBounds = true,
   });
 
   final String kakaoJavascriptKey;
   final List<RunningPathPoint> path;
   final RunningPathPoint? focus;
   final bool interactive;
+  final bool hideCurrentMarker;
+  final bool fitPathToBounds;
 
   @override
   State<KakaoMapView> createState() => _KakaoMapViewState();
@@ -66,8 +70,15 @@ class _KakaoMapViewState extends State<KakaoMapView> {
     _controller.runJavaScript('setPath($pathJson);');
     if (focus != null) {
       _controller.runJavaScript(
+        widget.hideCurrentMarker
+            ? 'setFocusOnly(${focus.latitude}, ${focus.longitude});'
+            : 'updateLocation(${focus.latitude}, ${focus.longitude});',
+      );
+      _controller.runJavaScript(
         'setCenter(${focus.latitude}, ${focus.longitude});',
       );
+    } else {
+      _controller.runJavaScript('clearLocation();');
     }
   }
 
@@ -81,11 +92,25 @@ class _KakaoMapViewState extends State<KakaoMapView> {
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <style>
       html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+      .current-location {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(42, 168, 255, 0.8);
+        border: 4px solid #ffffff;
+        box-shadow: 0 0 12px rgba(42, 168, 255, 0.6);
+      }
     </style>
     <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${widget.kakaoJavascriptKey}&autoload=false"></script>
     <script type="text/javascript">
       let map;
       let polyline;
+      let locationOverlay;
+      let focusMarker;
+      let pendingPath = null;
+      let pendingLocation = null;
+      let pendingFocus = null;
+      let pendingCenter = { lat: $lat, lng: $lng };
       kakao.maps.load(function() {
         var container = document.getElementById('map');
         var options = {
@@ -101,15 +126,23 @@ class _KakaoMapViewState extends State<KakaoMapView> {
           strokeOpacity: 0.9,
           strokeStyle: 'solid',
         });
+        renderPath();
+        renderLocation();
+        renderFocus();
+        renderCenter();
       });
 
       function setCenter(lat, lng) {
-        if (!map) return;
-        map.setCenter(new kakao.maps.LatLng(lat, lng));
+        pendingCenter = { lat: lat, lng: lng };
+        renderCenter();
+      }
+
+      function renderCenter() {
+        if (!map || !pendingCenter) return;
+        map.setCenter(new kakao.maps.LatLng(pendingCenter.lat, pendingCenter.lng));
       }
 
       function setPath(pathJson) {
-        if (!map || !polyline) return;
         var data = [];
         try {
           data = JSON.parse(pathJson);
@@ -119,15 +152,76 @@ class _KakaoMapViewState extends State<KakaoMapView> {
         if (!Array.isArray(data)) {
           data = [];
         }
-        var points = data.map(function(p) {
+        pendingPath = data;
+        renderPath();
+      }
+
+      function renderPath() {
+        if (!map || !polyline || !pendingPath) return;
+        var points = pendingPath.map(function(p) {
           return new kakao.maps.LatLng(p.lat, p.lng);
         });
+        if (points.length === 0) return;
         polyline.setPath(points);
-        if (points.length > 0) {
+        if (${widget.fitPathToBounds ? 'true' : 'false'}) {
           var bounds = new kakao.maps.LatLngBounds();
           points.forEach(function(p) { bounds.extend(p); });
           map.setBounds(bounds, 32, 32, 32, 32);
         }
+      }
+
+      function updateLocation(lat, lng) {
+        pendingLocation = { lat: lat, lng: lng };
+        renderLocation();
+      }
+
+      function renderLocation() {
+        if (!map || !pendingLocation) return;
+        var position = new kakao.maps.LatLng(pendingLocation.lat, pendingLocation.lng);
+        if (!locationOverlay) {
+          locationOverlay = new kakao.maps.CustomOverlay({
+            position: position,
+            yAnchor: 0.5,
+            xAnchor: 0.5,
+            content: '<div class="current-location"></div>'
+          });
+        }
+        locationOverlay.setPosition(position);
+        locationOverlay.setMap(map);
+      }
+
+      function setFocusOnly(lat, lng) {
+        pendingFocus = { lat: lat, lng: lng };
+        renderFocus();
+      }
+
+      function renderFocus() {
+        if (!map || !pendingFocus) return;
+        var position = new kakao.maps.LatLng(pendingFocus.lat, pendingFocus.lng);
+        if (!focusMarker) {
+          focusMarker = new kakao.maps.CustomOverlay({
+            position: position,
+            yAnchor: 0.5,
+            xAnchor: 0.5,
+            content: '<div class="current-location"></div>'
+          });
+        }
+        focusMarker.setPosition(position);
+        focusMarker.setMap(map);
+      }
+
+      function clearLocation() {
+        if (locationOverlay) {
+          locationOverlay.setMap(null);
+          locationOverlay = null;
+        }
+        if (focusMarker) {
+          focusMarker.setMap(null);
+          focusMarker = null;
+        }
+        pendingLocation = null;
+        pendingFocus = null;
+        pendingCenter = null;
       }
     </script>
   </head>
