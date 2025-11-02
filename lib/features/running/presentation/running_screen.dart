@@ -101,6 +101,7 @@ class _RunningScreenState extends State<RunningScreen> {
       body: SafeArea(
         child: Stack(
           children: [
+            Positioned.fill(child: Container(color: Colors.grey.shade300)),
             Positioned.fill(
               child: _kakaoKey.isEmpty
                   ? const Center(child: Text('카카오 맵 키가 설정되지 않았습니다.'))

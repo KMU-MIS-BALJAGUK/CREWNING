@@ -44,7 +44,10 @@ class _KakaoMapViewState extends State<KakaoMapView> {
           },
         ),
       )
-      ..loadHtmlString(_buildHtml(initialLat, initialLng));
+      ..loadHtmlString(
+        _buildHtml(initialLat, initialLng),
+        baseUrl: 'https://localhost',
+      );
   }
 
   @override

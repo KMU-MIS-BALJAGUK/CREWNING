@@ -248,6 +248,10 @@ class RunningController extends ChangeNotifier {
   }
 
   void _addPosition(Position position) {
+    if (!position.latitude.isFinite || !position.longitude.isFinite) {
+      return;
+    }
+
     final point = RunningPathPoint(
       latitude: position.latitude,
       longitude: position.longitude,
@@ -263,7 +267,19 @@ class RunningController extends ChangeNotifier {
         point.longitude,
       );
       if (!segment.isNaN && segment.isFinite) {
-        _distanceMeters += segment;
+        // ignore noise when standing still
+        if (segment < 1.0) {
+          _distanceMeters += segment * 0.2;
+        } else if (segment < 5.0) {
+          _distanceMeters += segment * 0.6;
+        } else if (segment < 50.0) {
+          _distanceMeters += segment;
+        } else if (_path.length > 1) {
+          // big jump: treat as teleport and keep path but do not increase distance
+        } else {
+          // first segment can be large if GPS locks late; still add but clamp
+          _distanceMeters += min(segment, 30.0);
+        }
       }
     }
 
@@ -280,10 +296,16 @@ class RunningController extends ChangeNotifier {
   }
 
   void _updateDerivedMetrics() {
-    final km = max(distanceKm, 0.0001);
-    _paceMinPerKm = (_elapsed.inSeconds / 60) / km;
-    if (_paceMinPerKm.isNaN || _paceMinPerKm.isInfinite) {
+    _distanceMeters = max(_distanceMeters, 0);
+    if (distanceKm < 0.05) {
       _paceMinPerKm = 0;
+    } else {
+      final km = distanceKm;
+      _paceMinPerKm = (_elapsed.inSeconds / 60) / km;
+      if (!_paceMinPerKm.isFinite || _paceMinPerKm < 0) {
+        _paceMinPerKm = 0;
+      }
+      _paceMinPerKm = _paceMinPerKm.clamp(0, 999.99).toDouble();
     }
     _calories = (distanceKm * 60).round();
   }
