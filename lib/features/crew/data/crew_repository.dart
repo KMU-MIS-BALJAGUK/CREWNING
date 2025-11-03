@@ -270,8 +270,8 @@ class CrewRepository {
         if (parsed is Map) {
           final err = parsed['error'];
           final application = parsed['application'];
-          if ((err is String && err.contains('Application already exists')) ||
-              (application is Map && application['status'] == 'pending')) {
+          if ((err is String && err.toString().toUpperCase().contains('APPLICATION') && err.toString().toUpperCase().contains('EXISTS')) ||
+              (application is Map && application['status']?.toString().toUpperCase() == 'PENDING')) {
             throw Exception('ALREADY_PENDING');
           }
         }
@@ -293,18 +293,47 @@ class CrewRepository {
   Future<Map<String, dynamic>?> fetchMyPendingApplication() async {
     final authUser = _client.auth.currentUser;
     if (authUser == null) return null;
+    // 우선 내부 매핑을 사용해 조회 시도
     try {
       final localUserId = await _getLocalUserId(authUser.id);
+      print('fetchMyPendingApplication - localUserId: $localUserId');
       final res = await _client
           .from('register')
           .select()
           .eq('user_id', localUserId)
-          .eq('status', 'pending')
+          .eq('status', 'PENDING')
           .order('created_at', ascending: false)
           .limit(1);
+      print('fetchMyPendingApplication - res by user_id: $res');
       if (res is List && res.isNotEmpty) return (res.first as Map<String, dynamic>);
+    } catch (e) {
+      print('fetchMyPendingApplication - lookup by localUserId failed: $e');
+      // 무시하고 폴백으로 계속 진행
+    }
+
+    // 폴백: user 테이블의 auth_user_id로 조인하여 조회
+    try {
+      // register 테이블에서 user를 조인하여 auth_user_id로 필터링
+      final res = await _client
+          .from('register')
+          .select('*, user(user_id, auth_user_id)')
+          .eq('status', 'PENDING')
+          .eq('user.auth_user_id', authUser.id)
+          .order('created_at', ascending: false)
+          .limit(1);
+      print('fetchMyPendingApplication - res by join: $res');
+      if (res is List && res.isNotEmpty) {
+        final row = res.first as Map<String, dynamic>;
+        // 일부 경우 crew_id가 문자열로 오므로 int로 변환 시도
+        if (row['crew_id'] is String) {
+          final parsed = int.tryParse(row['crew_id'] as String);
+          if (parsed != null) row['crew_id'] = parsed;
+        }
+        return row;
+      }
       return null;
-    } catch (_) {
+    } catch (e) {
+      print('fetchMyPendingApplication - join lookup failed: $e');
       return null;
     }
   }
@@ -313,17 +342,128 @@ class CrewRepository {
   Future<bool> cancelApplication() async {
     final authUser = _client.auth.currentUser;
     if (authUser == null) throw Exception('로그인이 필요합니다.');
+    // 먼저 로컬 매핑으로 삭제 시도
     try {
       final localUserId = await _getLocalUserId(authUser.id);
       final res = await _client
           .from('register')
           .delete()
-          .match({'user_id': localUserId, 'status': 'pending'})
+          .match({'user_id': localUserId, 'status': 'PENDING'})
+          .select();
+      if (res is List && res.isNotEmpty) return true;
+    } catch (_) {
+      // 실패 시 폴백으로 auth_user_id 기반 삭제 시도
+    }
+
+    try {
+      final res = await _client
+          .from('register')
+          .delete()
+          .eq('status', 'PENDING')
+          .eq('user.auth_user_id', authUser.id)
           .select();
       if (res is List && res.isNotEmpty) return true;
       return false;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Fetch pending applicants for a crew. Returns list of maps with register + user info.
+  Future<List<Map<String, dynamic>>> fetchApplicants(int crewId) async {
+    final authUser = _client.auth.currentUser;
+    if (authUser == null) throw Exception('로그인이 필요합니다.');
+    try {
+      // Call server-side RPC that returns applicant jsonb to avoid RLS issues
+      final res = await _client.rpc(
+        'get_pending_applicants_for_leader',
+        params: {'p_crew_id': crewId, 'p_auth_user_id': authUser.id},
+      );
+      print('fetchApplicants - rpc res: $res');
+      if (res == null) return [];
+      final List<Map<String, dynamic>> out = [];
+      if (res is List) {
+        for (final r in res.cast<Map<String, dynamic>>()) {
+          final Map<String, dynamic> row = Map<String, dynamic>.from(r);
+          final applicantField = row['applicant'];
+          // applicant may come back as Map or JSON string depending on client; normalize to Map
+          if (applicantField is String) {
+            try {
+              row['user'] = jsonDecode(applicantField) as Map<String, dynamic>;
+            } catch (_) {
+              row['user'] = <String, dynamic>{};
+            }
+          } else if (applicantField is Map) {
+            row['user'] = Map<String, dynamic>.from(applicantField as Map<String, dynamic>);
+          } else {
+            row['user'] = <String, dynamic>{};
+          }
+          out.add(row);
+        }
+        return out;
+      }
+      if (res is Map) {
+        final Map<String, dynamic> row = Map<String, dynamic>.from(res);
+        final applicantField = row['applicant'];
+        if (applicantField is String) {
+          try {
+            row['user'] = jsonDecode(applicantField) as Map<String, dynamic>;
+          } catch (_) {
+            row['user'] = <String, dynamic>{};
+          }
+        } else if (applicantField is Map) {
+          row['user'] = Map<String, dynamic>.from(applicantField as Map<String, dynamic>);
+        } else {
+          row['user'] = <String, dynamic>{};
+        }
+        return [row];
+      }
+      return [];
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Reject (delete) an application by register_id. Returns true if deleted or rejected via RPC.
+  Future<bool> rejectApplicant(int registerId) async {
+    final authUser = _client.auth.currentUser;
+    if (authUser == null) throw Exception('로그인이 필요합니다.');
+    try {
+      // Prefer server-side RPC to update status to REJECTED with proper auth checks
+      final res = await _client.rpc('reject_application', params: {
+        'p_register_id': registerId,
+        'p_auth_user_id': authUser.id,
+      });
+      print('rejectApplicant - rpc res: $res');
+      if (res != null) return true;
+
+      // Fallback: try direct delete (may be blocked by RLS)
+      final del = await _client.from('register').delete().eq('register_id', registerId).select();
+      if (del is List && del.isNotEmpty) return true;
+      return false;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Approve an application. Prefer server RPC 'approve_application' if available.
+  /// If RPC not available, throw to indicate server-side support is required.
+  Future<bool> approveApplicant(int registerId) async {
+    final authUser = _client.auth.currentUser;
+    if (authUser == null) throw Exception('로그인이 필요합니다.');
+    try {
+      // Try calling RPC - this RPC should be implemented server-side to perform
+      // the combined update (set user.crew_id and remove register) with proper auth.
+      final res = await _client.rpc('approve_application', params: {
+        'p_register_id': registerId,
+        'p_auth_user_id': authUser.id,
+      });
+      // If RPC exists, SDK returns a list or value. Treat non-null as success.
+      if (res != null) return true;
+      return false;
+    } catch (e) {
+      // Bubble up with helpful message if RPC missing or failed
+      throw Exception('승인 처리에 실패했습니다. 서버(RPC approve_application) 설정이 필요합니다: $e');
     }
   }
 }

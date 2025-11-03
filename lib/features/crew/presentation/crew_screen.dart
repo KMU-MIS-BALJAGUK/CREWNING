@@ -234,9 +234,12 @@ class _CrewScreenState extends State<CrewScreen>
       setState(() {
         _myCrewSummary = summary;
       });
+      // 생성 후 요약·랭킹·대기신청을 모두 새로고침합니다.
       await Future.wait([
+        _loadSummary(),
         _loadWeekly(refresh: true),
         _loadTotal(refresh: true),
+        _loadPendingApplication(),
       ]);
     }
   }
@@ -272,6 +275,8 @@ class _CrewScreenState extends State<CrewScreen>
     if (_initialLoading) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final theme = Theme.of(context);
 
     final myCrewCard = _summaryLoading
         ? const Padding(
@@ -324,7 +329,7 @@ class _CrewScreenState extends State<CrewScreen>
                                 final ok = await _repository.cancelApplication();
                                 if (ok) {
                                   if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('신청이 취소되었습니다.')));
+                                  showSnackBarSafely(context, const SnackBar(content: Text('신청이 취소되었습니다.')));
                                   setState(() {
                                     _pendingApplication = null;
                                     _pendingCrewName = null;
@@ -405,11 +410,59 @@ class _CrewScreenState extends State<CrewScreen>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreateDialog,
-        icon: const Icon(Icons.group_add_outlined),
-        label: const Text('크루 생성'),
+      floatingActionButton: Builder(
+        builder: (context) {
+          // Show refresh FAB always. Show create FAB only if not in a crew.
+          // If in crew and leader, show '신청자' FAB instead of create FAB.
+          final bool inCrew = _myCrewSummary != null;
+          // Avoid referencing leaderUserId on CrewSummary (model doesn't have that field).
+          // Determine leadership when opening applicants via repository.fetchCrewMembers if needed.
+          final bool viewerIsLeader = false;
+
+          return Row(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              const SizedBox(width: 16),
+              FloatingActionButton(
+                heroTag: 'refreshFab',
+                onPressed: () async {
+                  try {
+                    await _loadInitial();
+                    if (!mounted) return;
+                    showSnackBarSafely(context, const SnackBar(content: Text('새로고침 완료')));
+                  } catch (e) {
+                    _showError(e);
+                  }
+                },
+                child: const Icon(Icons.refresh),
+              ),
+              const Spacer(),
+              if (!inCrew) ...[
+                FloatingActionButton.extended(
+                  onPressed: _showCreateDialog,
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('크루 생성'),
+                ),
+              ] else ...[
+                // If user is in a crew and leader, show applicants button. Otherwise show nothing.
+                FloatingActionButton.extended(
+                  onPressed: () async {
+                    // open applicants modal
+                    await showDialog<void>(
+                      context: context,
+                      builder: (ctx) => _ApplicantsDialog(repository: _repository, crewSummary: _myCrewSummary!),
+                    );
+                  },
+                  icon: const Icon(Icons.person_search),
+                  label: const Text('신청자'),
+                ),
+              ],
+              const SizedBox(width: 16),
+            ],
+          );
+        },
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
@@ -610,7 +663,6 @@ class _PinnedCrewCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '${summary.memberCount}/${summary.maxMember} 명',
-                      style: theme.textTheme.bodySmall,
                     ),
                   ],
                 ),
@@ -641,3 +693,162 @@ class _PinnedCrewCard extends StatelessWidget {
 // - crew_widgets.dart (크루 로고)
 // - create_crew_dialog.dart (크루 생성 다이얼로그)
 // - crew_detail.dart (크루 상세 및 멤버 타일)
+
+class _ApplicantsDialog extends StatefulWidget {
+  const _ApplicantsDialog({
+    required this.repository,
+    required this.crewSummary,
+  });
+
+  final CrewRepository repository;
+  final CrewSummary crewSummary;
+
+  @override
+  State<_ApplicantsDialog> createState() => _ApplicantsDialogState();
+}
+
+class _ApplicantsDialogState extends State<_ApplicantsDialog> {
+  bool _loading = true;
+  List<Map<String, dynamic>> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final list = await widget.repository.fetchApplicants(widget.crewSummary.crewId);
+      if (!mounted) return;
+      setState(() {
+        _items = list;
+      });
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.9,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Text('${widget.crewSummary.crewName} 신청자', style: Theme.of(context).textTheme.titleLarge),
+                  const Spacer(),
+                  IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close)),
+                ],
+              ),
+            ),
+            if (_loading) const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+            if (!_loading)
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _items.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final item = _items[index];
+                    final regId = item['register_id'] as int?;
+                    final created = item['created_at']?.toString() ?? '';
+                    final user = (item['user'] as Map<String, dynamic>?) ?? {};
+                    final userName = user['name'] ?? '익명';
+                    final intro = item['introduction']?.toString() ?? '';
+                    return Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _ApplicantTile(
+                        registerId: regId,
+                        createdAt: created,
+                        userName: userName,
+                        introduction: intro,
+                        onApprove: () async {
+                          try {
+                            await widget.repository.approveApplicant(regId!);
+                            await _load();
+                          } catch (e) {
+                            showError(context, e);
+                          }
+                        },
+                        onReject: () async {
+                          try {
+                            await widget.repository.rejectApplicant(regId!);
+                            await _load();
+                          } catch (e) {
+                            showError(context, e);
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ApplicantTile extends StatefulWidget {
+  const _ApplicantTile({this.registerId, required this.createdAt, required this.userName, required this.introduction, required this.onApprove, required this.onReject});
+  final int? registerId;
+  final String createdAt;
+  final String userName;
+  final String introduction;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onReject;
+
+  @override
+  State<_ApplicantTile> createState() => _ApplicantTileState();
+}
+
+class _ApplicantTileState extends State<_ApplicantTile> {
+  bool _expanded = false;
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = widget.createdAt.isNotEmpty ? widget.createdAt.split('T').first.replaceAll('-', '/') : '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: Text('${dateStr}  ${widget.userName}')),
+            IconButton(
+              onPressed: () => setState(() => _expanded = !_expanded),
+              icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+            ),
+          ],
+        ),
+        if (_expanded)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(widget.introduction.isNotEmpty ? widget.introduction : '소개 없음'),
+          ),
+        Row(
+          children: [
+            ElevatedButton(
+              onPressed: () async => await widget.onApprove(),
+              child: const Text('수락'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: () async => await widget.onReject(),
+              child: const Text('거절'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

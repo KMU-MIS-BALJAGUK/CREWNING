@@ -57,13 +57,13 @@ serve(async (req: Request) => {
     }
 
     // check duplicate pending
-    const { data: existing } = await sb.from('register').select('register_id').eq('user_id', localUserId).eq('status', 'pending').limit(1);
+    const { data: existing } = await sb.from('register').select('register_id').eq('user_id', localUserId).eq('status', 'PENDING').limit(1);
     if (existing && Array.isArray(existing) && existing.length > 0) {
       return new Response(JSON.stringify({ error: 'ALREADY_PENDING' }), { status: 409 });
     }
 
     // insert into register
-    const insertRecord: any = { crew_id: crewId, user_id: localUserId, status: 'pending' };
+    const insertRecord: any = { crew_id: crewId, user_id: localUserId, status: 'PENDING' };
     if (introduction) insertRecord.introduction = introduction;
 
     const { data: reg, error: regErr } = await sb.from('register').insert(insertRecord).select().maybeSingle();
