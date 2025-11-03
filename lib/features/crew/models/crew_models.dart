@@ -56,6 +56,7 @@ class CrewMemberEntry {
     required this.userId,
     required this.userName,
     required this.isLeader,
+    required this.isMyself,
     required this.weeklyScore,
     required this.totalScore,
   });
@@ -64,6 +65,7 @@ class CrewMemberEntry {
   final int userId;
   final String userName;
   final bool isLeader;
+  final bool isMyself;
   final int weeklyScore;
   final int totalScore;
 }
@@ -129,6 +131,7 @@ CrewMemberEntry mapMember(Map<String, dynamic> data) {
     userId: (data['user_id'] as num).toInt(),
     userName: data['user_name'] as String,
     isLeader: data['is_leader'] as bool? ?? false,
+    isMyself: data['is_myself'] as bool? ?? false,
     weeklyScore: (data['weekly_score'] as num?)?.toInt() ?? 0,
     totalScore: (data['total_score'] as num?)?.toInt() ?? 0,
   );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:crewning/utils/error_handler.dart';
 
 class MyPageScreen extends StatefulWidget {
   const MyPageScreen({super.key});

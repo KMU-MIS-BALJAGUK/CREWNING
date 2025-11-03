@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:collection';
 import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -6,8 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:crewning/utils/error_handler.dart';
+
 import '../../crew/data/crew_repository.dart';
 import '../../crew/models/crew_models.dart';
+import 'crew_widgets.dart';
+import 'create_crew_dialog.dart';
+import 'crew_detail.dart';
 
 class CrewScreen extends StatefulWidget {
   const CrewScreen({super.key});
@@ -33,6 +38,8 @@ class _CrewScreenState extends State<CrewScreen>
   bool _totalHasMore = true;
   bool _initialLoading = true;
   bool _summaryLoading = true;
+  Map<String, dynamic>? _pendingApplication;
+  String? _pendingCrewName;
 
   CrewSummary? _myCrewSummary;
   List<AreaOption>? _areas;
@@ -55,6 +62,7 @@ class _CrewScreenState extends State<CrewScreen>
       _loadWeekly(refresh: true),
       _loadTotal(refresh: true),
       _loadSummary(),
+      _loadPendingApplication(),
     ]);
     if (mounted) {
       setState(() {
@@ -151,6 +159,28 @@ class _CrewScreenState extends State<CrewScreen>
     }
   }
 
+  Future<void> _loadPendingApplication() async {
+    try {
+      final pending = await _repository.fetchMyPendingApplication();
+      String? crewName;
+      if (pending != null && pending['crew_id'] != null) {
+        try {
+          final summary = await _repository.fetchCrewOverview(pending['crew_id'] as int);
+          crewName = summary.crewName;
+        } catch (_) {
+          crewName = null;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _pendingApplication = pending;
+        _pendingCrewName = crewName;
+      });
+    } catch (e) {
+      // ignore silently
+    }
+  }
+
   void _weeklyScrollListener() {
     if (!_weeklyHasMore || _weeklyLoading) return;
     if (_weeklyController.position.pixels >=
@@ -168,14 +198,31 @@ class _CrewScreenState extends State<CrewScreen>
   }
 
   void _showError(Object error) {
+    // 로그와 UI 알림을 모두 처리
     if (!mounted) return;
-    final message = error.toString();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showError(context, error);
   }
 
   Future<void> _showCreateDialog() async {
+    // 이미 크루에 소속되어 있으면 생성 다이얼로그 대신 안내 알림을 띄움
+    if (_myCrewSummary != null) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('알림'),
+          content: const Text('이미 크루에 소속되어 있습니다. 먼저 크루를 탈퇴해주세요.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('확인'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     _areas ??= await _repository.fetchAreas();
     if (!mounted) return;
     final summary = await showCrewCreateDialog(
@@ -195,12 +242,21 @@ class _CrewScreenState extends State<CrewScreen>
   }
 
   Future<void> _openCrewDetail(int crewId, String crewName) async {
-    await showCrewDetailDialog(
+    final changed = await showCrewDetailDialog(
       context,
       repository: _repository,
       crewId: crewId,
       crewName: crewName,
     );
+    if (changed == true) {
+      if (!mounted) return;
+      // 요약 및 랭킹 목록을 새로고침
+      await Future.wait([
+        _loadSummary(),
+        _loadWeekly(refresh: true),
+        _loadTotal(refresh: true),
+      ]);
+    }
   }
 
   @override
@@ -234,13 +290,66 @@ class _CrewScreenState extends State<CrewScreen>
                   ),
                 ),
               )
-            : const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                child: Text(
-                  '크루에 참가하여 크루닝에 참가하세요',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-              );
+            : (_pendingApplication != null)
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${_pendingCrewName ?? '크루'}에 신청 중입니다.',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('신청 취소'),
+                                content: const Text('정말 신청을 취소하시겠습니까?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('취소')),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(ctx).pop(true),
+                                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                    child: const Text('확인'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              try {
+                                final ok = await _repository.cancelApplication();
+                                if (ok) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('신청이 취소되었습니다.')));
+                                  setState(() {
+                                    _pendingApplication = null;
+                                    _pendingCrewName = null;
+                                  });
+                                  await Future.wait([_loadSummary(), _loadWeekly(refresh: true), _loadTotal(refresh: true)]);
+                                } else {
+                                  throw Exception('취소 실패');
+                                }
+                              } catch (e) {
+                                _showError(e);
+                              }
+                            }
+                          },
+                          child: const Text('신청취소'),
+                        ),
+                      ],
+                    ),
+                  )
+                : const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    child: Text(
+                      '크루에 참가하여 크루닝에 참가하세요',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                  );
 
     return Scaffold(
       body: Column(
@@ -412,7 +521,7 @@ class CrewRankingCard extends StatelessWidget {
                   ),
                 ),
               ),
-              _CrewLogo(url: entry.logoUrl, name: entry.crewName),
+              CrewLogo(url: entry.logoUrl, name: entry.crewName),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -486,7 +595,7 @@ class _PinnedCrewCard extends StatelessWidget {
             children: [
               const Icon(Icons.push_pin_outlined),
               const SizedBox(width: 12),
-              _CrewLogo(url: summary.logoUrl, name: summary.crewName),
+              CrewLogo(url: summary.logoUrl, name: summary.crewName),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -527,580 +636,8 @@ class _PinnedCrewCard extends StatelessWidget {
   }
 }
 
-class _CrewLogo extends StatelessWidget {
-  const _CrewLogo({required this.url, required this.name});
-
-  final String? url;
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    final initials = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'C';
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        width: 56,
-        height: 56,
-        child: url != null && url!.isNotEmpty
-            ? CachedNetworkImage(
-                imageUrl: url!,
-                fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => _placeholder(initials),
-              )
-            : _placeholder(initials),
-      ),
-    );
-  }
-
-  Widget _placeholder(String initials) {
-    return Container(
-      color: Colors.blueGrey.shade100,
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 20,
-        ),
-      ),
-    );
-  }
-}
-
-Future<CrewSummary?> showCrewCreateDialog(
-  BuildContext context, {
-  required CrewRepository repository,
-  required List<AreaOption> areas,
-}) async {
-  final picker = ImagePicker();
-  String crewName = '';
-  final Set<int> selectedAreaIds = {};
-  String? introduction;
-  XFile? selectedFile;
-  Uint8List? previewBytes;
-  bool submitting = false;
-
-  Future<void> pickImage(StateSetter setState, BuildContext dialogContext) async {
-    final file = await picker.pickImage(source: ImageSource.gallery);
-    if (file != null) {
-      final theme = Theme.of(dialogContext);
-      final cropped = await ImageCropper().cropImage(
-        sourcePath: file.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: '크루 로고 자르기',
-            toolbarColor: theme.colorScheme.surface,
-            toolbarWidgetColor: theme.colorScheme.primary,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: true,
-          ),
-          IOSUiSettings(
-            title: '크루 로고 자르기',
-            aspectRatioLockEnabled: true,
-            aspectRatioPickerButtonHidden: true,
-          ),
-        ],
-      );
-      if (cropped != null) {
-        final bytes = await cropped.readAsBytes();
-        setState(() {
-          selectedFile = XFile(cropped.path);
-          previewBytes = bytes;
-        });
-      }
-    }
-  }
-
-  final result = await showDialog<CrewSummary>(
-    context: context,
-    barrierColor: Colors.black87,
-    builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final isValid = crewName.trim().length >= 2 &&
-              crewName.trim().length <= 10 &&
-              selectedAreaIds.isNotEmpty;
-          final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-          return AnimatedPadding(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-            padding: EdgeInsets.only(bottom: bottomInset),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 340),
-                child: Material(
-                  borderRadius: BorderRadius.circular(20),
-                  clipBehavior: Clip.antiAlias,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 24,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              '크루 생성',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: submitting
-                                  ? null
-                                  : () => Navigator.of(context).pop(),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          enabled: !submitting,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            labelText: '크루명 (2~10자)',
-                          ),
-                          maxLength: 10,
-                          onChanged: (value) {
-                            setState(() {
-                              crewName = value;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '크루 로고',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: submitting
-                              ? null
-                              : () => pickImage(setState, context),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              height: 120,
-                              color: Colors.grey.shade200,
-                              alignment: Alignment.center,
-                              child: previewBytes != null
-                                  ? Image.memory(
-                                      previewBytes!,
-                                      fit: BoxFit.cover,
-                                      width: double.infinity,
-                                    )
-                                  : const Text('이미지 선택'),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          '크루 활동 지역 (최대 3개)',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: areas.map((area) {
-                            final selected =
-                                selectedAreaIds.contains(area.areaId);
-                            return ChoiceChip(
-                              label: Text(area.name),
-                              selected: selected,
-                              onSelected: submitting
-                                  ? null
-                                  : (value) {
-                                      setState(() {
-                                        if (value) {
-                                          if (selectedAreaIds.length < 3) {
-                                            selectedAreaIds.add(area.areaId);
-                                          }
-                                        } else {
-                                          selectedAreaIds.remove(area.areaId);
-                                        }
-                                      });
-                                    },
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 20),
-                        TextField(
-                          enabled: !submitting,
-                          maxLines: null,
-                          maxLength: 100,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            labelText: '크루 한줄 소개 (선택)',
-                          ),
-                          onChanged: (value) {
-                            setState(() {
-                              introduction = value.isEmpty ? null : value;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: submitting
-                                    ? null
-                                    : () => Navigator.of(context).pop(),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(48),
-                                ),
-                                child: const Text('취소'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: !isValid || submitting
-                                    ? null
-                                    : () async {
-                                        setState(() {
-                                          submitting = true;
-                                        });
-                                        try {
-                                          String? logoUrl;
-                                          if (selectedFile != null) {
-                                            logoUrl = await repository
-                                                .uploadCrewLogo(selectedFile!);
-                                          }
-                                          final summary =
-                                              await repository.createCrew(
-                                            crewName: crewName.trim(),
-                                            areaIds: (selectedAreaIds.toList()
-                                              ..sort()),
-                                            introduction: introduction,
-                                            logoUrl: logoUrl,
-                                          );
-                                          if (context.mounted) {
-                                            Navigator.of(context)
-                                                .pop(summary);
-                                          }
-                                        } catch (error) {
-                                          if (!context.mounted) return;
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(
-                                            SnackBar(
-                                              content:
-                                                  Text(error.toString()),
-                                            ),
-                                          );
-                                        } finally {
-                                          if (context.mounted) {
-                                            setState(() {
-                                              submitting = false;
-                                            });
-                                          }
-                                        }
-                                      },
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(48),
-                                  backgroundColor: isValid
-                                      ? Theme.of(context)
-                                          .colorScheme
-                                          .primary
-                                      : Colors.grey,
-                                ),
-                                child: submitting
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : const Text('확인'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
-
-  return result;
-}
-
-Future<void> showCrewDetailDialog(
-  BuildContext context, {
-  required CrewRepository repository,
-  required int crewId,
-  required String crewName,
-}) {
-  return showDialog<void>(
-    context: context,
-    barrierDismissible: true,
-    barrierColor: Colors.black.withAlpha((0.7 * 255).round()),
-    builder: (context) {
-      return Dialog(
-        insetPadding: const EdgeInsets.all(16),
-        backgroundColor: Colors.transparent,
-        child: _CrewDetailContent(
-          repository: repository,
-          crewId: crewId,
-          crewName: crewName,
-        ),
-      );
-    },
-  );
-}
-
-class _CrewDetailContent extends StatefulWidget {
-  const _CrewDetailContent({
-    required this.repository,
-    required this.crewId,
-    required this.crewName,
-  });
-
-  final CrewRepository repository;
-  final int crewId;
-  final String crewName;
-
-  @override
-  State<_CrewDetailContent> createState() => _CrewDetailContentState();
-}
-
-class _CrewDetailContentState extends State<_CrewDetailContent> {
-  late Future<Map<String, dynamic>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = _load();
-  }
-
-  Future<Map<String, dynamic>> _load() async {
-    final overview = await widget.repository.fetchCrewOverview(widget.crewId);
-    final members = await widget.repository.fetchCrewMembers(widget.crewId);
-    return {
-      'overview': overview,
-      'members': members,
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          if (snapshot.hasError) {
-            return Material(
-              borderRadius: BorderRadius.circular(24),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  '크루 정보를 불러오지 못했습니다.\n${snapshot.error}',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-            );
-          }
-          return const Center(child: CircularProgressIndicator());
-        }
-        final overview = snapshot.data!['overview'] as CrewSummary;
-        final members =
-            (snapshot.data!['members'] as List<CrewMemberEntry>).toList();
-        return Material(
-          borderRadius: BorderRadius.circular(24),
-          clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            width: min(MediaQuery.of(context).size.width * 0.9, 420),
-            height: min(MediaQuery.of(context).size.height * 0.85, 640),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  color: theme.colorScheme.primary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _CrewLogo(
-                        url: overview.logoUrl,
-                        name: overview.crewName,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              overview.crewName,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${overview.memberCount}/${overview.maxMember} 명',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.white70,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '주간 ${overview.weeklyRank ?? '-'}위 · 점수 ${overview.weeklyScore}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
-                              ),
-                            ),
-                            Text(
-                              '누적 ${overview.totalRank ?? '-'}위 · 점수 ${overview.totalScore}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                ),
-                if (overview.introduction != null &&
-                    overview.introduction!.isNotEmpty)
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Text(
-                      overview.introduction!,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    itemCount: members.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final member = members[index];
-                      return _CrewMemberTile(member: member);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _CrewMemberTile extends StatelessWidget {
-  const _CrewMemberTile({required this.member});
-
-  final CrewMemberEntry member;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isLeader = member.isLeader;
-    return Container(
-      decoration: BoxDecoration(
-        color: isLeader
-            ? theme.colorScheme.primaryContainer
-            : theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isLeader
-              ? theme.colorScheme.primary.withAlpha((0.6 * 255).round())
-              : theme.colorScheme.outlineVariant,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 36,
-              child: Text(
-                '#${member.rank}',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        member.userName,
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      if (member.isLeader)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 6),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              '리더',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        '주간 ${member.weeklyScore}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        '누적 ${member.totalScore}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// 위쪽에 있는 크루 로고, 생성 다이얼로그, 크루 상세화면 및 멤버 타일 관련 구현은
+// 각각의 파일로 분리되었습니다:
+// - crew_widgets.dart (크루 로고)
+// - create_crew_dialog.dart (크루 생성 다이얼로그)
+// - crew_detail.dart (크루 상세 및 멤버 타일)
