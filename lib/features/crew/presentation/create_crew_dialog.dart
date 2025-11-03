@@ -132,9 +132,8 @@ class _CreateCrewDialogState extends State<_CreateCrewDialog> {
     await _loadAreas(force: true);
     if (!mounted) return;
     if (_groupedAreas.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('등록된 지역이 없습니다.')),
-      );
+      showSnackBarSafely(context, const SnackBar(content: Text('등록된 지역이 없습니다.')));
+      
       return;
     }
     final result = await showDialog<Set<int>>(
@@ -170,6 +169,8 @@ class _CreateCrewDialogState extends State<_CreateCrewDialog> {
         logoUrl: logoUrl,
       );
       if (!mounted) return;
+      // show success snack before popping to avoid deactivated context
+      showSnackBarSafely(context, const SnackBar(content: Text('크루가 생성되었습니다.')));
       Navigator.of(context).pop(summary);
     } catch (error) {
       if (!mounted) return;

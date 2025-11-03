@@ -228,8 +228,9 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
                                   try {
                                     await widget.repository.leaveCrew();
                                     if (!mounted) return;
-                                    Navigator.of(context).pop(true);
+                                    // show message before popping to avoid using a deactivated context
                                     showError(context, '크루 탈퇴 및 크루 삭제(예정) 처리되었습니다.');
+                                    Navigator.of(context).pop(true);
                                   } catch (error) {
                                     if (!mounted) return;
                                     // 오류 처리: iOS에서 4xx는 UI에 표시하지 않고 로그로 대체
@@ -243,9 +244,9 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
                               try {
                                 await widget.repository.leaveCrew();
                                 if (!mounted) return;
-                                // 성공 시 부모에게 변경이 발생했음을 알림
-                                Navigator.of(context).pop(true);
+                                // show message before popping to avoid deactivated context
                                 showError(context, '크루 탈퇴가 완료되었습니다.');
+                                Navigator.of(context).pop(true);
                               } catch (error) {
                                 if (!mounted) return;
                                 // 오류 처리: iOS에서 4xx는 UI에 표시하지 않고 로그로 대체
@@ -279,19 +280,8 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
                                 final success = await widget.repository.applyCrew(crewId: overview.crewId, message: msg);
                                 if (!mounted) return;
                                 if (success) {
-                                  await showDialog<void>(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                      title: const Text('신청 완료'),
-                                      content: const Text('신청이 완료되었습니다.'),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.of(ctx).pop(),
-                                          child: const Text('확인'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
+                                  // 신청이 성공하면 이 다이얼로그를 닫고 부모에게 변경 사실을 알립니다.
+                                  Navigator.of(context).pop(true);
                                 } else {
                                   showError(context, '가입 신청이 전송되었으나, 서버에 기록이 확인되지 않았습니다.');
                                 }
@@ -340,7 +330,7 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
                       return Row(
                         children: [
                           Expanded(child: _CrewMemberTile(member: member, repository: widget.repository, crewId: widget.crewId, viewerIsLeader: viewerIsLeader, displayRank: displayRank)),
-                          if (member.isLeader == false) Container()
+                          if (member.isLeader == false) Container(),
                           // 실제 표시 로직은 아래에서 대체
                         ],
                       );
