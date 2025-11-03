@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:crewning/utils/error_handler.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -66,6 +67,7 @@ class _AuthScreenState extends State<AuthScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error.message)));
+      showError(context, error);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
