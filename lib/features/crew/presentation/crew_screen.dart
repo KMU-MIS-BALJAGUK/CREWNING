@@ -78,38 +78,46 @@ class _CrewScreenState extends State<CrewScreen>
       child: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
-          child: Row(
-            children: [
-              Icon(
-                Icons.place_outlined,
-                color: theme.colorScheme.primary,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<AreaOption?>(
-                    isExpanded: true,
-                    value: _selectedArea,
-                    hint: Text(
-                      _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
-                      style: theme.textTheme.bodyMedium,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.place_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<AreaOption?>(
+                      isExpanded: true,
+                      value: _selectedArea,
+                      hint: Text(
+                        _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      items: items,
+                      onChanged: _areasLoading
+                          ? null
+                          : (value) {
+                              _changeArea(value);
+                            },
                     ),
-                    items: items,
-                    onChanged: _areasLoading
-                        ? null
-                        : (value) {
-                            _changeArea(value);
-                          },
                   ),
                 ),
-              ),
-              if (_selectedArea != null)
-                IconButton(
-                  tooltip: '지역 초기화',
-                  icon: const Icon(Icons.close),
-                  onPressed: _areasLoading ? null : () => _changeArea(null),
-                ),
-            ],
+                if (_selectedArea != null)
+                  IconButton(
+                    tooltip: '지역 초기화',
+                    icon: const Icon(Icons.close),
+                    onPressed: _areasLoading ? null : () => _changeArea(null),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
