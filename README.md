@@ -1,4 +1,4 @@
-<img width="640" height="876" alt="image" src="https://github.com/user-attachments/assets/9c7b4754-2ad3-4802-b8e5-47bb37a7ddda" /># 🏃‍♂️ CREWNING  
+# 🏃‍♂️ CREWNING  
 **전국 러닝 크루 대항전 플랫폼**  
 > 러닝을 게임처럼, 크루를 팀처럼 — 경쟁이 동기부여가 되는 러닝 커뮤니티 앱
 
