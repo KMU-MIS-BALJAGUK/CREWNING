@@ -586,6 +586,8 @@ class _CrewScreenState extends State<CrewScreen>
               const SizedBox(width: 16),
               FloatingActionButton(
                 heroTag: 'refreshFab',
+                backgroundColor: Colors.white,
+                foregroundColor: Theme.of(context).colorScheme.primary,
                 onPressed: () async {
                   try {
                     await _loadInitial();
@@ -607,8 +609,9 @@ class _CrewScreenState extends State<CrewScreen>
               ] else ...[
                 // If user is in a crew and leader, show applicants button. Otherwise show nothing.
                 FloatingActionButton.extended(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Theme.of(context).colorScheme.primary,
                   onPressed: () async {
-                    // open applicants modal
                     await showDialog<void>(
                       context: context,
                       builder: (ctx) => _ApplicantsDialog(repository: _repository, crewSummary: _myCrewSummary!),

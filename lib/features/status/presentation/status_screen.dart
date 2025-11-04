@@ -35,6 +35,8 @@ class _StatusScreenState extends State<StatusScreen> {
           child: SafeArea(
             child: FloatingActionButton(
               heroTag: 'statusRefreshFab',
+              backgroundColor: Colors.white,
+              foregroundColor: Theme.of(context).colorScheme.primary,
               onPressed: _isReloading
                   ? null
                   : () async {
@@ -62,10 +64,12 @@ class _StatusScreenState extends State<StatusScreen> {
                       height: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          const Color(0xFF2AA8FF),
+                        ),
                       ),
                     )
-                  : const Icon(Icons.refresh),
+                  : Icon(Icons.refresh, color: Theme.of(context).colorScheme.primary),
             ),
           ),
         ),
