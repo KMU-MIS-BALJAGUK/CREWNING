@@ -107,22 +107,69 @@ class _RunningRecordTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(1.4),
+                  1: FlexColumnWidth(1),
+                  2: FlexColumnWidth(1),
+                },
+                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                 children: [
-                  _RecordMetric(
-                    label: '거리',
-                    value: '${formatDistance(record.distanceKm)} km',
+                  TableRow(
+                    children: [
+                      _RecordMetric(
+                        label: '거리',
+                        value: '${formatDistance(record.distanceKm)} km',
+                        textAlign: TextAlign.center,
+                        alignment: CrossAxisAlignment.center,
+                      ),
+                      _RecordMetric(
+                        label: '평균 페이스',
+                        value: formatPace(record.paceMinPerKm),
+                        textAlign: TextAlign.center,
+                        alignment: CrossAxisAlignment.center,
+                      ),
+                      _RecordMetric(
+                        label: '시간',
+                        value: formatDuration(record.duration),
+                        textAlign: TextAlign.center,
+                        alignment: CrossAxisAlignment.center,
+                      ),
+                    ],
                   ),
-                  _RecordMetric(
-                    label: '평균 페이스',
-                    value: formatPace(record.paceMinPerKm),
+                  TableRow(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: _RecordMetric(
+                          label: '출발 지역',
+                          value: record.startAreaName?.isNotEmpty == true
+                              ? record.startAreaName!
+                              : '확인 중',
+                          textAlign: TextAlign.center,
+                          alignment: CrossAxisAlignment.center,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: _RecordMetric(
+                          label: '점수',
+                          value: _formatScore(record.score),
+                          textAlign: TextAlign.center,
+                          alignment: CrossAxisAlignment.center,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: _RecordMetric(
+                          label: '칼로리',
+                          value: '${record.calories} kcal',
+                          textAlign: TextAlign.center,
+                          alignment: CrossAxisAlignment.center,
+                        ),
+                      ),
+                    ],
                   ),
-                  _RecordMetric(
-                    label: '시간',
-                    value: formatDuration(record.duration),
-                  ),
-                  _RecordMetric(label: '칼로리', value: '${record.calories} kcal'),
                 ],
               ),
             ],
@@ -133,22 +180,41 @@ class _RunningRecordTile extends StatelessWidget {
   }
 }
 
+String _formatScore(double? score) {
+  if (score == null) return '-';
+  final rounded = double.parse(score.toStringAsFixed(2));
+  if ((rounded % 1).abs() < 0.001) {
+    return rounded.toStringAsFixed(0);
+  }
+  return rounded.toStringAsFixed(1);
+}
+
 class _RecordMetric extends StatelessWidget {
-  const _RecordMetric({required this.label, required this.value});
+  const _RecordMetric({
+    required this.label,
+    required this.value,
+    this.textAlign = TextAlign.center,
+    this.alignment = CrossAxisAlignment.center,
+  });
 
   final String label;
   final String value;
+  final TextAlign textAlign;
+  final CrossAxisAlignment alignment;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: alignment,
       children: [
         Text(
           value,
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.bold,
           ),
+          textAlign: textAlign,
         ),
         const SizedBox(height: 4),
         Text(
@@ -156,6 +222,7 @@ class _RecordMetric extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
+          textAlign: textAlign,
         ),
       ],
     );

@@ -123,6 +123,8 @@ class RunningController extends ChangeNotifier {
       startTime: _startTime,
       endTime: _endTime,
       path: List.of(_path),
+      score: null,
+      startAreaName: null,
     );
     notifyListeners();
   }

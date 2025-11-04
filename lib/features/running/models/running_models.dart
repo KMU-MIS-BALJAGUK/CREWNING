@@ -27,6 +27,8 @@ class RunningRecordModel {
     required this.startTime,
     required this.endTime,
     required this.path,
+    this.score,
+    this.startAreaName,
   });
 
   final int recordId;
@@ -38,6 +40,8 @@ class RunningRecordModel {
   final DateTime? startTime;
   final DateTime? endTime;
   final List<RunningPathPoint> path;
+  final double? score;
+  final String? startAreaName;
 
   Duration get duration => Duration(seconds: elapsedSeconds);
 
@@ -94,6 +98,8 @@ class RunningRecordModel {
           ? DateTime.tryParse(map['end_time'] as String)
           : null,
       path: decodedPath,
+      score: (map['score'] as num?)?.toDouble(),
+      startAreaName: (map['start_area_name'] as String?)?.trim(),
     );
   }
 
@@ -107,6 +113,8 @@ class RunningRecordModel {
     DateTime? startTime,
     DateTime? endTime,
     List<RunningPathPoint>? path,
+    double? score,
+    String? startAreaName,
   }) {
     return RunningRecordModel(
       recordId: recordId ?? this.recordId,
@@ -118,6 +126,8 @@ class RunningRecordModel {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       path: path ?? this.path,
+      score: score ?? this.score,
+      startAreaName: startAreaName ?? this.startAreaName,
     );
   }
 

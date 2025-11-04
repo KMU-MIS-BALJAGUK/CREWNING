@@ -23,6 +23,7 @@ class RunningScreen extends StatefulWidget {
 class _RunningScreenState extends State<RunningScreen> {
   late final RunningController _controller;
   Timer? _holdTimer;
+  bool _stopTriggered = false;
   bool _initializing = true;
   String? _errorMessage;
 
@@ -172,6 +173,7 @@ class _RunningScreenState extends State<RunningScreen> {
             _SecondaryCircleButton(
               label: '종료',
               color: Colors.black87,
+              onTap: _showHoldHint,
               onLongPressed: _handleHoldToStop,
               onLongPressCancel: _cancelHoldToStop,
             ),
@@ -191,16 +193,29 @@ class _RunningScreenState extends State<RunningScreen> {
 
   void _handleHoldToStop() {
     _holdTimer?.cancel();
-    _holdTimer = Timer(const Duration(seconds: 2), () async {
+    _stopTriggered = false;
+    _holdTimer = Timer(const Duration(seconds: 1), () async {
       _holdTimer?.cancel();
       _holdTimer = null;
+      _stopTriggered = true;
       await _controller.stopRun();
     });
   }
 
   void _cancelHoldToStop() {
+    final hadTimer = _holdTimer != null;
     _holdTimer?.cancel();
     _holdTimer = null;
+    if (!_stopTriggered && hadTimer) {
+      _showHoldHint();
+    }
+  }
+
+  void _showHoldHint() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('종료 버튼을 길게 눌러 운동을 종료합니다.')),
+    );
   }
 
   Future<void> _openRecordsSheet() async {
@@ -320,12 +335,14 @@ class _SecondaryCircleButton extends StatelessWidget {
   const _SecondaryCircleButton({
     required this.label,
     required this.color,
+    required this.onTap,
     required this.onLongPressed,
     required this.onLongPressCancel,
   });
 
   final String label;
   final Color color;
+  final VoidCallback onTap;
   final VoidCallback onLongPressed;
   final VoidCallback onLongPressCancel;
 
@@ -333,6 +350,7 @@ class _SecondaryCircleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return GestureDetector(
+      onTap: onTap,
       onLongPressStart: (_) => onLongPressed(),
       onLongPressEnd: (_) => onLongPressCancel(),
       onTapDown: (_) {},
