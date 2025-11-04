@@ -179,6 +179,9 @@ class _RunningScreenState extends State<RunningScreen> {
                           final canFocus = _controller.currentLocation != null;
                           return FloatingActionButton(
                             heroTag: 'running_map_focus',
+                            backgroundColor: Colors.white,
+                            foregroundColor:
+                                Theme.of(context).colorScheme.primary,
                             mini: true,
                             tooltip: '내 위치로 이동',
                             onPressed: canFocus ? _triggerCenterOnUser : null,
