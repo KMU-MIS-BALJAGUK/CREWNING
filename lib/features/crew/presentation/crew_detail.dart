@@ -121,7 +121,7 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
     });
   }
 
-  Widget _buildAreaFilter(ThemeData theme) {
+  Widget _buildAreaFilter(BuildContext context, ThemeData theme) {
     final options = _areas ?? const <AreaOption>[];
     final dropdownItems = <DropdownMenuItem<AreaOption?>>[
       const DropdownMenuItem<AreaOption?>(
@@ -136,33 +136,41 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
       ),
     ];
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxWidth = screenWidth * 0.55;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-      child: Row(
-        children: [
-          Icon(Icons.place_outlined, color: theme.colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<AreaOption?>(
-                isExpanded: true,
-                value: _selectedArea,
-                hint: Text(
-                  _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
-                  style: theme.textTheme.bodyMedium,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Row(
+            children: [
+              Icon(Icons.place_outlined, color: theme.colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<AreaOption?>(
+                    isExpanded: true,
+                    value: _selectedArea,
+                    hint: Text(
+                      _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    items: dropdownItems,
+                    onChanged: _areasLoading ? null : _changeArea,
+                  ),
                 ),
-                items: dropdownItems,
-                onChanged: _areasLoading ? null : _changeArea,
               ),
-            ),
+              if (_selectedArea != null)
+                IconButton(
+                  tooltip: '지역 초기화',
+                  icon: const Icon(Icons.close),
+                  onPressed: _areasLoading ? null : () => _changeArea(null),
+                ),
+            ],
           ),
-          if (_selectedArea != null)
-            IconButton(
-              tooltip: '지역 초기화',
-              icon: const Icon(Icons.close),
-              onPressed: _areasLoading ? null : () => _changeArea(null),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -170,7 +178,7 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final areaFilter = _buildAreaFilter(theme);
+    final areaFilter = _buildAreaFilter(context, theme);
     return FutureBuilder<Map<String, dynamic>>(
       future: _future,
       builder: (context, snapshot) {
