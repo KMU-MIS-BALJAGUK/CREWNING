@@ -10,6 +10,8 @@ Future<bool?> showCrewDetailDialog(
   required CrewRepository repository,
   required int crewId,
   required String crewName,
+  AreaOption? initialArea,
+  List<AreaOption>? areas,
 }) {
   return showDialog<bool?>(
     context: context,
@@ -23,6 +25,8 @@ Future<bool?> showCrewDetailDialog(
           repository: repository,
           crewId: crewId,
           crewName: crewName,
+          initialArea: initialArea,
+          areas: areas,
         ),
       );
     },
@@ -34,11 +38,15 @@ class _CrewDetailContent extends StatefulWidget {
     required this.repository,
     required this.crewId,
     required this.crewName,
+    this.initialArea,
+    this.areas,
   });
 
   final CrewRepository repository;
   final int crewId;
   final String crewName;
+  final AreaOption? initialArea;
+  final List<AreaOption>? areas;
 
   @override
   State<_CrewDetailContent> createState() => _CrewDetailContentState();
@@ -46,25 +54,123 @@ class _CrewDetailContent extends StatefulWidget {
 
 class _CrewDetailContentState extends State<_CrewDetailContent> {
   late Future<Map<String, dynamic>> _future;
+  AreaOption? _selectedArea;
+  List<AreaOption>? _areas;
+  bool _areasLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _selectedArea = widget.initialArea;
+    _areas = widget.areas;
+    _future = _load(areaName: _selectedArea?.name);
+    if (_areas == null) {
+      _loadAreas();
+    }
   }
 
-  Future<Map<String, dynamic>> _load() async {
-    final overview = await widget.repository.fetchCrewOverview(widget.crewId);
-    final members = await widget.repository.fetchCrewMembers(widget.crewId);
+  Future<void> _loadAreas() async {
+    setState(() {
+      _areasLoading = true;
+    });
+    final previousAreaId = _selectedArea?.areaId;
+    try {
+      final areas = await widget.repository.fetchAreas();
+      if (!mounted) return;
+      setState(() {
+        _areas = areas;
+        if (_selectedArea != null) {
+          final matched = areas.where((a) => a.areaId == _selectedArea!.areaId);
+          _selectedArea = matched.isNotEmpty ? matched.first : null;
+        }
+        if (_selectedArea?.areaId != previousAreaId) {
+          _future = _load(areaName: _selectedArea?.name);
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _areasLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _load({String? areaName}) async {
+    final trimmedArea = areaName?.trim();
+    final areaParam = (trimmedArea == null || trimmedArea.isEmpty) ? null : trimmedArea;
+    final overview = await widget.repository.fetchCrewOverview(
+      crewId: widget.crewId,
+      areaName: areaParam,
+    );
+    final members = await widget.repository.fetchCrewMembers(
+      widget.crewId,
+      areaName: areaParam,
+    );
     return {
       'overview': overview,
       'members': members,
     };
   }
 
+  void _changeArea(AreaOption? newArea) {
+    if (_selectedArea?.areaId == newArea?.areaId) return;
+    setState(() {
+      _selectedArea = newArea;
+      _future = _load(areaName: newArea?.name);
+    });
+  }
+
+  Widget _buildAreaFilter(ThemeData theme) {
+    final options = _areas ?? const <AreaOption>[];
+    final dropdownItems = <DropdownMenuItem<AreaOption?>>[
+      const DropdownMenuItem<AreaOption?>(
+        value: null,
+        child: Text('전체 지역'),
+      ),
+      ...options.map(
+        (area) => DropdownMenuItem<AreaOption?>(
+          value: area,
+          child: Text(area.name),
+        ),
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+      child: Row(
+        children: [
+          Icon(Icons.place_outlined, color: theme.colorScheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<AreaOption?>(
+                isExpanded: true,
+                value: _selectedArea,
+                hint: Text(
+                  _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                items: dropdownItems,
+                onChanged: _areasLoading ? null : _changeArea,
+              ),
+            ),
+          ),
+          if (_selectedArea != null)
+            IconButton(
+              tooltip: '지역 초기화',
+              icon: const Icon(Icons.close),
+              onPressed: _areasLoading ? null : () => _changeArea(null),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final areaFilter = _buildAreaFilter(theme);
     return FutureBuilder<Map<String, dynamic>>(
       future: _future,
       builder: (context, snapshot) {
@@ -99,6 +205,7 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                areaFilter,
                 Container(
                   color: theme.colorScheme.primary,
                   padding:

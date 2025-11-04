@@ -17,6 +17,8 @@ class CrewRepository {
   static const _summaryRpc = 'get_my_crew_summary';
   static const _overviewRpc = 'get_crew_overview';
   static const _membersRpc = 'get_crew_members';
+  static const _weeklyAreaRpc = 'get_weekly_crew_rankings_by_area';
+  static const _totalAreaRpc = 'get_total_crew_rankings_by_area';
   static const _createCrewRpc = 'create_crew';
   static const _logoBucket = 'crew-logos';
 
@@ -24,10 +26,12 @@ class CrewRepository {
     int offset = 0,
     int limit = 100,
     String? weekId,
+    String? areaName,
   }) async {
     final response = await _client.rpc(
-      _weeklyRpc,
+      areaName == null ? _weeklyRpc : _weeklyAreaRpc,
       params: {
+        if (areaName != null) 'p_area_name': areaName,
         if (weekId != null) 'target_week': weekId,
         'fetch_limit': limit,
         'fetch_offset': offset,
@@ -40,14 +44,17 @@ class CrewRepository {
   Future<List<CrewRankingEntry>> fetchTotalRankings({
     int offset = 0,
     int limit = 100,
+    String? areaName,
+    String? weekId,
   }) async {
-    final response = await _client.rpc(
-      _totalRpc,
-      params: {
-        'fetch_limit': limit,
-        'fetch_offset': offset,
-      },
-    );
+    final rpc = areaName == null ? _totalRpc : _totalAreaRpc;
+    final params = <String, dynamic>{
+      if (areaName != null) 'p_area_name': areaName,
+      if (areaName != null && weekId != null) 'target_week': weekId,
+      'fetch_limit': limit,
+      'fetch_offset': offset,
+    };
+    final response = await _client.rpc(rpc, params: params);
     final list = (response as List).cast<Map<String, dynamic>>();
     return list.map(mapTotalRanking).toList();
   }
@@ -68,12 +75,17 @@ class CrewRepository {
     return mapSummary(list.first);
   }
 
-  Future<CrewSummary> fetchCrewOverview(int crewId, {String? weekId}) async {
+  Future<CrewSummary> fetchCrewOverview({
+    required int crewId,
+    String? weekId,
+    String? areaName,
+  }) async {
     final response = await _client.rpc(
       _overviewRpc,
       params: {
         'p_crew_id': crewId,
         if (weekId != null) 'target_week': weekId,
+        if (areaName != null) 'p_area_name': areaName,
       },
     );
     final list = (response as List).cast<Map<String, dynamic>>();
@@ -83,11 +95,18 @@ class CrewRepository {
     return mapSummary(list.first)!;
   }
 
-  Future<List<CrewMemberEntry>> fetchCrewMembers(int crewId) async {
+  Future<List<CrewMemberEntry>> fetchCrewMembers(
+    int crewId, {
+    String? areaName,
+  }) async {
     final authUser = _client.auth.currentUser;
     final response = await _client.rpc(
       _membersRpc,
-      params: {'p_crew_id': crewId, 'p_auth_user_id': authUser?.id},
+      params: {
+        'p_crew_id': crewId,
+        'p_auth_user_id': authUser?.id,
+        if (areaName != null) 'p_area_name': areaName,
+      },
     );
     final list = (response as List).cast<Map<String, dynamic>>();
     return list.map(mapMember).toList();
