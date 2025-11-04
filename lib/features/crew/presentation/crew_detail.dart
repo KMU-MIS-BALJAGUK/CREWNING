@@ -142,6 +142,7 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final maxWidth = screenWidth * 0.55;
+    final menuMaxHeight = MediaQuery.of(context).size.height * 0.45;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
@@ -169,6 +170,7 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
                         style: theme.textTheme.bodyMedium,
                       ),
                       items: dropdownItems,
+                      menuMaxHeight: menuMaxHeight,
                       onChanged: _areasLoading ? null : _changeArea,
                     ),
                   ),

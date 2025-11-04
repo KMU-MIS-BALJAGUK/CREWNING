@@ -72,6 +72,7 @@ class _CrewScreenState extends State<CrewScreen>
 
     final screenWidth = MediaQuery.of(context).size.width;
     final maxWidth = screenWidth * 0.55;
+    final menuMaxHeight = MediaQuery.of(context).size.height * 0.45;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -102,6 +103,7 @@ class _CrewScreenState extends State<CrewScreen>
                         style: theme.textTheme.bodyMedium,
                       ),
                       items: items,
+                      menuMaxHeight: menuMaxHeight,
                       onChanged: _areasLoading
                           ? null
                           : (value) {

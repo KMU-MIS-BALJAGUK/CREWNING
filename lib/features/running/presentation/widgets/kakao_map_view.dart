@@ -17,6 +17,8 @@ class KakaoMapView extends StatefulWidget {
     // optional percent offsets (0.5 = 50%). Specify only percent offsets now.
     this.centerOffsetXPercent = 0.0,
     this.centerOffsetYPercent = 0.0,
+    this.autoCenter = true,
+    this.onReady,
   });
 
   final String kakaoJavascriptKey;
@@ -27,6 +29,8 @@ class KakaoMapView extends StatefulWidget {
   final bool fitPathToBounds;
   final double centerOffsetXPercent;
   final double centerOffsetYPercent;
+  final bool autoCenter;
+  final void Function(Future<void> Function())? onReady;
 
   @override
   State<KakaoMapView> createState() => _KakaoMapViewState();
@@ -73,22 +77,41 @@ class _KakaoMapViewState extends State<KakaoMapView> {
       widget.path.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList(),
     );
     _controller.runJavaScript('setPath($pathJson);');
+    _controller.runJavaScript('setDraggable(${widget.interactive ? 'true' : 'false'});');
     if (focus != null) {
       _controller.runJavaScript(
         widget.hideCurrentMarker
             ? 'setFocusOnly(${focus.latitude}, ${focus.longitude});'
             : 'updateLocation(${focus.latitude}, ${focus.longitude});',
       );
-      // center with percent offsets only
-      final offsetXPercent = widget.centerOffsetXPercent;
-      final offsetYPercent = widget.centerOffsetYPercent;
-      _controller.runJavaScript(
-        'setCenterWithOffset(${focus.latitude}, ${focus.longitude}, ${offsetXPercent}, ${offsetYPercent});',
-      );
+      if (widget.autoCenter) {
+        final offsetXPercent = widget.centerOffsetXPercent;
+        final offsetYPercent = widget.centerOffsetYPercent;
+        _controller.runJavaScript(
+          'setCenterWithOffset(${focus.latitude}, ${focus.longitude}, ${offsetXPercent}, ${offsetYPercent});',
+        );
+      }
     } else {
       _controller.runJavaScript('clearLocation();');
     }
+    _notifyReady();
   }
+
+  void _notifyReady() {
+    final callback = widget.onReady;
+    if (callback != null) {
+      callback(_centerOnCurrentLocation);
+    }
+  }
+
+  Future<void> _centerOnCurrentLocation() async {
+    final focus = widget.focus ?? widget.path.lastOrNull;
+    if (focus == null) return;
+    await _controller.runJavaScript(
+      'setCenterWithOffset(${focus.latitude}, ${focus.longitude}, ${widget.centerOffsetXPercent}, ${widget.centerOffsetYPercent});',
+    );
+  }
+
 
   String _buildHtml(double lat, double lng) {
     final draggable = widget.interactive ? 'true' : 'false';
@@ -155,6 +178,11 @@ class _KakaoMapViewState extends State<KakaoMapView> {
           pendingCenterOffsetYPercent = percentY;
         }
         renderCenter();
+      }
+
+      function setDraggable(draggable) {
+        if (!map) return;
+        map.setDraggable(!!draggable);
       }
 
       function setCenter(lat, lng) {

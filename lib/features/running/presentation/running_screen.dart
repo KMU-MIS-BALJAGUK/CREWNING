@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,7 +15,9 @@ import 'widgets/running_records_sheet.dart';
 import 'widgets/running_stats_panel.dart';
 
 class RunningScreen extends StatefulWidget {
-  const RunningScreen({super.key});
+  const RunningScreen({super.key, this.focusRequests});
+
+  final ValueNotifier<int>? focusRequests;
 
   @override
   State<RunningScreen> createState() => _RunningScreenState();
@@ -26,6 +29,11 @@ class _RunningScreenState extends State<RunningScreen> {
   bool _stopTriggered = false;
   bool _initializing = true;
   String? _errorMessage;
+  bool _mapInteractive = true;
+  Future<void> Function()? _mapRefocus;
+  ValueNotifier<int>? _focusRequests;
+  int _lastProcessedFocusRequest = 0;
+  bool _pendingCenterRequest = false;
 
   String get _kakaoKey =>
       dotenv.env['KAKAO_MAP_JAVASCRIPT_KEY'] ??
@@ -39,7 +47,29 @@ class _RunningScreenState extends State<RunningScreen> {
       RunningRepository(Supabase.instance.client),
     );
     _controller.addListener(_listener);
+    _focusRequests = widget.focusRequests;
+    _focusRequests?.addListener(_handleFocusRequests);
+    final initialRequest = _focusRequests?.value ?? 0;
+    _lastProcessedFocusRequest = initialRequest;
+    if (initialRequest > 0) {
+      _pendingCenterRequest = true;
+    }
     _initialize();
+  }
+
+  @override
+  void didUpdateWidget(covariant RunningScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusRequests != widget.focusRequests) {
+      oldWidget.focusRequests?.removeListener(_handleFocusRequests);
+      _focusRequests = widget.focusRequests;
+      _focusRequests?.addListener(_handleFocusRequests);
+      final newValue = _focusRequests?.value;
+      if (newValue != null && newValue > _lastProcessedFocusRequest) {
+        _pendingCenterRequest = true;
+      }
+      _handleFocusRequests();
+    }
   }
 
   Future<void> _initialize() async {
@@ -59,11 +89,15 @@ class _RunningScreenState extends State<RunningScreen> {
   void _listener() {
     if (mounted) {
       setState(() {});
+      if (_pendingCenterRequest && _controller.currentLocation != null) {
+        _triggerCenterOnUser();
+      }
     }
   }
 
   @override
   void dispose() {
+    _focusRequests?.removeListener(_handleFocusRequests);
     _holdTimer?.cancel();
     _controller.removeListener(_listener);
     _controller.dispose();
@@ -114,9 +148,45 @@ class _RunningScreenState extends State<RunningScreen> {
                             kakaoJavascriptKey: _kakaoKey,
                             path: _controller.currentPath,
                             focus: _controller.currentLocation,
-                            interactive: true,
+                            interactive: _mapInteractive,
                             fitPathToBounds: false,
+                            autoCenter: false,
+                            onReady: (refocus) {
+                              if (!mounted) return;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!mounted) return;
+                                final previousRefocus = _mapRefocus;
+                                _mapRefocus = refocus;
+                                final shouldRefocus = _pendingCenterRequest &&
+                                    _controller.currentLocation != null;
+                                if (shouldRefocus) {
+                                  _pendingCenterRequest = false;
+                                  refocus();
+                                }
+                                if (previousRefocus != _mapRefocus) {
+                                  setState(() {});
+                                }
+                              });
+                            },
                           ),
+                  ),
+                  Positioned(
+                    bottom: 120,
+                    left: 20,
+                    child: SafeArea(
+                      child: Builder(
+                        builder: (context) {
+                          final canFocus = _controller.currentLocation != null;
+                          return FloatingActionButton(
+                            heroTag: 'running_map_focus',
+                            mini: true,
+                            tooltip: '내 위치로 이동',
+                            onPressed: canFocus ? _triggerCenterOnUser : null,
+                            child: const Icon(Icons.my_location),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                   Positioned(
                     top: 20,
@@ -218,28 +288,59 @@ class _RunningScreenState extends State<RunningScreen> {
     );
   }
 
+  void _handleFocusRequests() {
+    final notifier = _focusRequests;
+    if (notifier == null) return;
+    final currentValue = notifier.value;
+    if (currentValue == _lastProcessedFocusRequest) return;
+    _lastProcessedFocusRequest = currentValue;
+    _triggerCenterOnUser();
+  }
+
+  void _triggerCenterOnUser() {
+    final refocus = _mapRefocus;
+    final hasLocation = _controller.currentLocation != null;
+    if (refocus != null && hasLocation) {
+      _pendingCenterRequest = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await refocus();
+      });
+    } else {
+      _pendingCenterRequest = true;
+    }
+  }
+
   Future<void> _openRecordsSheet() async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return RunningRecordsSheet(
-          records: _controller.records,
-          loading: _controller.recordsLoading,
-          onRefresh: () async {
-            await _controller.refreshRecords();
-            if (context.mounted) {
+    if (mounted) {
+      setState(() => _mapInteractive = false);
+    }
+    try {
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) {
+          return RunningRecordsSheet(
+            records: _controller.records,
+            loading: _controller.recordsLoading,
+            onRefresh: () async {
+              await _controller.refreshRecords();
+              if (context.mounted) {
+                Navigator.of(context).pop();
+                _openRecordsSheet();
+              }
+            },
+            onRecordTap: (record) {
               Navigator.of(context).pop();
-              _openRecordsSheet();
-            }
-          },
-          onRecordTap: (record) {
-            Navigator.of(context).pop();
-            _openRecordDetail(record);
-          },
-        );
-      },
-    );
+              _openRecordDetail(record);
+            },
+          );
+        },
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _mapInteractive = true);
+      }
+    }
   }
 
   Future<void> _openRecordDetail(RunningRecordModel record) async {
