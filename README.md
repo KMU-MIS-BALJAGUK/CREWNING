@@ -55,6 +55,20 @@
           <a href="https://github.com/jaehyeokkk" target="_blank">@jaehyeokkk</a>
         </td>
       </tr>
+       <tr align="center">
+        <td>
+          <p>Flutter & SUPABASE</p>
+        </td>
+        <td>
+          <p>SUPABASE & React</p>
+        </td>
+        <td>
+          <p>SUPABASE</p>
+        </td>
+        <td>
+          <p>SUPABASE</p>
+        </td>
+      </tr>
     </tbody>
   </table>
 </div>
@@ -62,5 +76,7 @@
 <br />
 
 ---
+
+## 🧩 Architecture
 
 <img width="765" height="563" alt="크루닝 아키텍처" src="https://github.com/user-attachments/assets/c026f8a9-03b4-4a93-993d-0572260a124a" />
