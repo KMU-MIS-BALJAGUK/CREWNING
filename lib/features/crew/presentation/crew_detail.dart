@@ -148,31 +148,39 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
       child: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: maxWidth),
-          child: Row(
-            children: [
-              Icon(Icons.place_outlined, color: theme.colorScheme.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<AreaOption?>(
-                    isExpanded: true,
-                    value: _selectedArea,
-                    hint: Text(
-                      _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
-                      style: theme.textTheme.bodyMedium,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.place_outlined, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<AreaOption?>(
+                      isExpanded: true,
+                      value: _selectedArea,
+                      hint: Text(
+                        _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                      items: dropdownItems,
+                      onChanged: _areasLoading ? null : _changeArea,
                     ),
-                    items: dropdownItems,
-                    onChanged: _areasLoading ? null : _changeArea,
                   ),
                 ),
-              ),
-              if (_selectedArea != null)
-                IconButton(
-                  tooltip: '지역 초기화',
-                  icon: const Icon(Icons.close),
-                  onPressed: _areasLoading ? null : () => _changeArea(null),
-                ),
-            ],
+                if (_selectedArea != null)
+                  IconButton(
+                    tooltip: '지역 초기화',
+                    icon: const Icon(Icons.close),
+                    onPressed: _areasLoading ? null : () => _changeArea(null),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -217,7 +225,6 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                areaFilter,
                 Container(
                   color: theme.colorScheme.primary,
                   padding:
@@ -446,10 +453,11 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
                             },
                             child: const Text('가입 신청하기'),
                           ),
-                        ),
-                     ],
-                   ),
+                      ),
+                    ],
+                  ),
                 ),
+                areaFilter,
                 const SizedBox(height: 8),
                 Expanded(
                   child: ListView.separated(
