@@ -43,6 +43,8 @@ class _CrewScreenState extends State<CrewScreen>
 
   CrewSummary? _myCrewSummary;
   List<AreaOption>? _areas;
+  AreaOption? _selectedArea;
+  bool _areasLoading = false;
 
   @override
   void initState() {
@@ -53,12 +55,176 @@ class _CrewScreenState extends State<CrewScreen>
     _loadInitial();
   }
 
+  Widget _buildAreaFilter(ThemeData theme) {
+    final options = _areas ?? const <AreaOption>[];
+    final items = <DropdownMenuItem<AreaOption?>>[
+      const DropdownMenuItem<AreaOption?>(
+        value: null,
+        child: Text('전체 지역'),
+      ),
+      ...options.map(
+        (area) => DropdownMenuItem<AreaOption?>(
+          value: area,
+          child: Text(area.name),
+        ),
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Row(
+        children: [
+          Icon(
+            Icons.place_outlined,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<AreaOption?>(
+                isExpanded: true,
+                value: _selectedArea,
+                hint: Text(
+                  _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                items: items,
+                onChanged: _areasLoading
+                    ? null
+                    : (value) {
+                        _changeArea(value);
+                      },
+              ),
+            ),
+          ),
+          if (_selectedArea != null)
+            IconButton(
+              tooltip: '지역 초기화',
+              icon: const Icon(Icons.close),
+              onPressed: _areasLoading ? null : () => _changeArea(null),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMyCrewCard() {
+    if (_summaryLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_myCrewSummary != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: _PinnedCrewCard(
+          summary: _myCrewSummary!,
+          onTap: () => _openCrewDetail(
+            _myCrewSummary!.crewId,
+            _myCrewSummary!.crewName,
+          ),
+        ),
+      );
+    }
+
+    if (_pendingApplication != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                '${_pendingCrewName ?? '크루'}에 신청 중입니다.',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('신청 취소'),
+                    content: const Text('정말 신청을 취소하시겠습니까?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        child: const Text('확인'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  try {
+                    final ok = await _repository.cancelApplication();
+                    if (ok) {
+                      if (!mounted) return;
+                      showSnackBarSafely(
+                        context,
+                        const SnackBar(content: Text('신청이 취소되었습니다.')),
+                      );
+                      setState(() {
+                        _pendingApplication = null;
+                        _pendingCrewName = null;
+                      });
+                      await Future.wait([
+                        _loadSummary(),
+                        _loadWeekly(refresh: true),
+                        _loadTotal(refresh: true),
+                      ]);
+                    } else {
+                      throw Exception('취소 실패');
+                    }
+                  } catch (e) {
+                    _showError(e);
+                  }
+                }
+              },
+              child: const Text('신청취소'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: Text(
+        '크루에 참가하여 크루닝에 참가하세요',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      ),
+    );
+  }
+
+  Widget _buildRankingHeader(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildAreaFilter(theme),
+        _buildMyCrewCard(),
+      ],
+    );
+  }
+
   Future<void> _loadInitial() async {
     setState(() {
       _initialLoading = true;
       _summaryLoading = true;
     });
     await Future.wait([
+      _loadAreas(),
       _loadWeekly(refresh: true),
       _loadTotal(refresh: true),
       _loadSummary(),
@@ -69,6 +235,52 @@ class _CrewScreenState extends State<CrewScreen>
         _initialLoading = false;
       });
     }
+  }
+
+  Future<void> _loadAreas() async {
+    setState(() {
+      _areasLoading = true;
+    });
+    try {
+      final areas = await _repository.fetchAreas();
+      if (mounted) {
+        setState(() {
+          _areas = areas;
+          if (_selectedArea != null) {
+            AreaOption? matched;
+            try {
+              matched = areas.firstWhere(
+                (element) => element.areaId == _selectedArea!.areaId,
+              );
+            } catch (_) {
+              matched = null;
+            }
+            _selectedArea = matched;
+          }
+        });
+      }
+    } catch (error) {
+      // 지역 목록 로딩은 치명적이지 않으므로 오류를 무시하고 계속 진행
+    } finally {
+      if (mounted) {
+        setState(() {
+          _areasLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _changeArea(AreaOption? newArea) async {
+    if (_selectedArea?.areaId == newArea?.areaId) {
+      return;
+    }
+    setState(() {
+      _selectedArea = newArea;
+    });
+    await Future.wait([
+      _loadWeekly(refresh: true),
+      _loadTotal(refresh: true),
+    ]);
   }
 
   Future<void> _loadSummary() async {
@@ -97,9 +309,11 @@ class _CrewScreenState extends State<CrewScreen>
     });
     try {
       final offset = refresh ? 0 : _weeklyEntries.length;
+      final areaName = _selectedArea?.name.trim();
       final entries = await _repository.fetchWeeklyRankings(
         offset: offset,
         limit: 100,
+        areaName: areaName?.isEmpty == true ? null : areaName,
       );
       if (!mounted) return;
       setState(() {
@@ -133,9 +347,11 @@ class _CrewScreenState extends State<CrewScreen>
     });
     try {
       final offset = refresh ? 0 : _totalEntries.length;
+      final areaName = _selectedArea?.name.trim();
       final entries = await _repository.fetchTotalRankings(
         offset: offset,
         limit: 100,
+        areaName: areaName?.isEmpty == true ? null : areaName,
       );
       if (!mounted) return;
       setState(() {
@@ -165,7 +381,9 @@ class _CrewScreenState extends State<CrewScreen>
       String? crewName;
       if (pending != null && pending['crew_id'] != null) {
         try {
-          final summary = await _repository.fetchCrewOverview(pending['crew_id'] as int);
+          final summary = await _repository.fetchCrewOverview(
+            crewId: pending['crew_id'] as int,
+          );
           crewName = summary.crewName;
         } catch (_) {
           crewName = null;
@@ -250,6 +468,8 @@ class _CrewScreenState extends State<CrewScreen>
       repository: _repository,
       crewId: crewId,
       crewName: crewName,
+      initialArea: _selectedArea,
+      areas: _areas,
     );
     if (changed == true) {
       if (!mounted) return;
@@ -277,84 +497,6 @@ class _CrewScreenState extends State<CrewScreen>
     }
 
     final theme = Theme.of(context);
-
-    final myCrewCard = _summaryLoading
-        ? const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        : _myCrewSummary != null
-            ? Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: _PinnedCrewCard(
-                  summary: _myCrewSummary!,
-                  onTap: () => _openCrewDetail(
-                    _myCrewSummary!.crewId,
-                    _myCrewSummary!.crewName,
-                  ),
-                ),
-              )
-            : (_pendingApplication != null)
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${_pendingCrewName ?? '크루'}에 신청 중입니다.',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () async {
-                            final confirm = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('신청 취소'),
-                                content: const Text('정말 신청을 취소하시겠습니까?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('취소')),
-                                  TextButton(
-                                    onPressed: () => Navigator.of(ctx).pop(true),
-                                    style: TextButton.styleFrom(foregroundColor: Colors.red),
-                                    child: const Text('확인'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirm == true) {
-                              try {
-                                final ok = await _repository.cancelApplication();
-                                if (ok) {
-                                  if (!mounted) return;
-                                  showSnackBarSafely(context, const SnackBar(content: Text('신청이 취소되었습니다.')));
-                                  setState(() {
-                                    _pendingApplication = null;
-                                    _pendingCrewName = null;
-                                  });
-                                  await Future.wait([_loadSummary(), _loadWeekly(refresh: true), _loadTotal(refresh: true)]);
-                                } else {
-                                  throw Exception('취소 실패');
-                                }
-                              } catch (e) {
-                                _showError(e);
-                              }
-                            }
-                          },
-                          child: const Text('신청취소'),
-                        ),
-                      ],
-                    ),
-                  )
-                : const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                    child: Text(
-                      '크루에 참가하여 크루닝에 참가하세요',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                    ),
-                  );
 
     return Scaffold(
       body: Column(
@@ -387,7 +529,7 @@ class _CrewScreenState extends State<CrewScreen>
                     ]);
                   },
                   onTapCrew: _openCrewDetail,
-                  header: myCrewCard,
+                  header: _buildRankingHeader(theme),
                 ),
                 _RankingTabView(
                   controller: _totalController,
@@ -403,7 +545,7 @@ class _CrewScreenState extends State<CrewScreen>
                     ]);
                   },
                   onTapCrew: _openCrewDetail,
-                  header: myCrewCard,
+                  header: _buildRankingHeader(theme),
                 ),
               ],
             ),

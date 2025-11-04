@@ -65,23 +65,24 @@ BEGIN
     v_elapsed_s := 0;
   END IF;
 
+  -- Simple scoring: 1 point per 100m (minimum 1 if distance is positive).
+  v_points := v_distance_m / 100;
+  IF v_distance_m > 0 AND v_points = 0 THEN
+    v_points := 1;
+  END IF;
+
   -- Update running_record with sanitized values.
   UPDATE public.running_record
   SET
     distance = v_distance_km::real,
     elapsed_seconds = v_elapsed_s,
     end_time = COALESCE(v_record.end_time, now()),
+    score = v_points,
     pace = CASE
       WHEN v_distance_km > 0 THEN ROUND((v_elapsed_s::numeric / 60) / NULLIF(v_distance_km, 0), 2)
       ELSE v_record.pace
     END
   WHERE record_id = _record_id;
-
-  -- Simple scoring: 1 point per 100m (minimum 1 if distance is positive).
-  v_points := v_distance_m / 100;
-  IF v_distance_m > 0 AND v_points = 0 THEN
-    v_points := 1;
-  END IF;
 
   v_new_weekly := COALESCE(v_owner.weekly_score, 0) + v_points;
   v_new_total := COALESCE(v_owner.total_score, 0) + v_points;

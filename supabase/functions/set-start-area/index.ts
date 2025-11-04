@@ -58,24 +58,18 @@ Deno.serve(async (req) => {
 
     const kakaoJson = await kakaoResp.json();
     const doc = Array.isArray(kakaoJson?.documents) && kakaoJson.documents.length ? kakaoJson.documents[0] : null;
-    let start_area_name: string | null = null;
-    if (doc) {
-      const r1 = doc.region_1depth_name || '';
-      const r2 = doc.region_2depth_name || '';
-      // normalize: e.g. '서울특별시' -> '서울시'
-      const normalizeR1 = (s: string) => {
-        if (!s) return s;
-        if (s.endsWith('특별시')) return s.replace(/특별시$/, '시');
-        if (s.endsWith('광역시')) return s.replace(/광역시$/, '시');
-        return s;
-      };
-      start_area_name = `${normalizeR1(r1)} ${r2}`.trim();
-    }
+    const region2Raw = typeof doc?.region_2depth_name === 'string' ? doc.region_2depth_name : '';
+    const start_area_name = region2Raw.trim() || null;
 
     // try to find matching area by name
     let start_area_id: number | null = null;
     if (start_area_name) {
-      const aRes = await supabase.from('area').select('area_id').eq('name', start_area_name).limit(1).maybeSingle();
+      const aRes = await supabase
+        .from('area')
+        .select('area_id')
+        .eq('name', start_area_name)
+        .limit(1)
+        .maybeSingle();
       if (aRes.error) throw aRes.error;
       const aRow = aRes.data as any;
       if (aRow) start_area_id = aRow.area_id as number;
