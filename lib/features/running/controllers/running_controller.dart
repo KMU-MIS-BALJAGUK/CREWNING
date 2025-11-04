@@ -143,13 +143,29 @@ class RunningController extends ChangeNotifier {
       final saved = await _repository.createRunningRecord(
         distanceKm: distanceKm,
         calories: calories,
-        paceMinPerKm: paceMinPerKm,
+        paceMinPerKm: _paceMinPerKm,
         elapsed: elapsed,
         start: _startTime!,
         end: _endTime!,
         path: List.of(_path),
       );
+
+      // insert saved locally so UI updates immediately
       _records.insert(0, saved);
+
+      // call finalize-running to compute score and update user totals
+      try {
+        await _repository.finalizeRunningRecord(
+          recordId: saved.recordId,
+          distanceKm: saved.distanceKm,
+          elapsedSeconds: saved.elapsedSeconds,
+        );
+      } catch (e) {
+        // ignore but log for debugging
+        // ignore: avoid_print
+        print('finalize-running call failed: $e');
+      }
+
       _reset();
     } finally {
       _isSaving = false;

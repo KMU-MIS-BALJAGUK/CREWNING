@@ -14,6 +14,9 @@ class KakaoMapView extends StatefulWidget {
     this.interactive = false,
     this.hideCurrentMarker = false,
     this.fitPathToBounds = true,
+    // optional percent offsets (0.5 = 50%). Specify only percent offsets now.
+    this.centerOffsetXPercent = 0.5,
+    this.centerOffsetYPercent = 0.5,
   });
 
   final String kakaoJavascriptKey;
@@ -22,6 +25,8 @@ class KakaoMapView extends StatefulWidget {
   final bool interactive;
   final bool hideCurrentMarker;
   final bool fitPathToBounds;
+  final double centerOffsetXPercent;
+  final double centerOffsetYPercent;
 
   @override
   State<KakaoMapView> createState() => _KakaoMapViewState();
@@ -74,8 +79,11 @@ class _KakaoMapViewState extends State<KakaoMapView> {
             ? 'setFocusOnly(${focus.latitude}, ${focus.longitude});'
             : 'updateLocation(${focus.latitude}, ${focus.longitude});',
       );
+      // center with percent offsets only
+      final offsetXPercent = widget.centerOffsetXPercent;
+      final offsetYPercent = widget.centerOffsetYPercent;
       _controller.runJavaScript(
-        'setCenter(${focus.latitude}, ${focus.longitude});',
+        'setCenterWithOffset(${focus.latitude}, ${focus.longitude}, ${offsetXPercent}, ${offsetYPercent});',
       );
     } else {
       _controller.runJavaScript('clearLocation();');
@@ -84,6 +92,8 @@ class _KakaoMapViewState extends State<KakaoMapView> {
 
   String _buildHtml(double lat, double lng) {
     final draggable = widget.interactive ? 'true' : 'false';
+    final centerOffsetXPercent = widget.centerOffsetXPercent.toString();
+    final centerOffsetYPercent = widget.centerOffsetYPercent.toString();
     return '''
 <!DOCTYPE html>
 <html>
@@ -132,6 +142,21 @@ class _KakaoMapViewState extends State<KakaoMapView> {
         renderCenter();
       });
 
+      var pendingCenterOffsetXPercent = ${centerOffsetXPercent};
+      var pendingCenterOffsetYPercent = ${centerOffsetYPercent};
+
+      // Accept only percent offsets (0.0 - 1.0). Values are treated as fractions of container size.
+      function setCenterWithOffset(lat, lng, percentX, percentY) {
+        pendingCenter = { lat: lat, lng: lng };
+        if (typeof percentX === 'number') {
+          pendingCenterOffsetXPercent = percentX;
+        }
+        if (typeof percentY === 'number') {
+          pendingCenterOffsetYPercent = percentY;
+        }
+        renderCenter();
+      }
+
       function setCenter(lat, lng) {
         pendingCenter = { lat: lat, lng: lng };
         renderCenter();
@@ -140,6 +165,29 @@ class _KakaoMapViewState extends State<KakaoMapView> {
       function renderCenter() {
         if (!map || !pendingCenter) return;
         map.setCenter(new kakao.maps.LatLng(pendingCenter.lat, pendingCenter.lng));
+        // Compute final pixel offsets. Percent offsets take precedence when non-zero.
+        try {
+          var px = Number(pendingCenterOffsetXPercent) || 0;
+          var py = Number(pendingCenterOffsetYPercent) || 0;
+          var x = 0;
+          var y = 0;
+          try {
+            var container = document.getElementById('map');
+            if (px !== 0 && container && container.clientWidth) {
+              x = px * container.clientWidth;
+            }
+            if (py !== 0 && container && container.clientHeight) {
+              y = py * container.clientHeight;
+            }
+          } catch (e) {
+            // ignore container measurement failures
+          }
+          if ((x !== 0) || (y !== 0)) {
+            map.panBy(x, y);
+          }
+        } catch (e) {
+          // ignore
+        }
       }
 
       function setPath(pathJson) {
