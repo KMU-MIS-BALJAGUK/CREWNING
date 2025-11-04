@@ -15,8 +15,8 @@ class KakaoMapView extends StatefulWidget {
     this.hideCurrentMarker = false,
     this.fitPathToBounds = true,
     // optional percent offsets (0.5 = 50%). Specify only percent offsets now.
-    this.centerOffsetXPercent = 0.5,
-    this.centerOffsetYPercent = 0.5,
+    this.centerOffsetXPercent = 0.0,
+    this.centerOffsetYPercent = 0.0,
   });
 
   final String kakaoJavascriptKey;

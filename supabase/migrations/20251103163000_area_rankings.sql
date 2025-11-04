@@ -22,12 +22,6 @@ BEGIN
   PERFORM set_config('search_path', 'public', true);
   v_area := NULLIF(trim(p_area_name), '');
 
-  IF v_area IS NULL THEN
-    RETURN QUERY
-    SELECT * FROM public.get_weekly_crew_rankings(target_week, fetch_limit, fetch_offset);
-    RETURN;
-  END IF;
-
   v_week_id := COALESCE(
     target_week,
     to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'IYYY-IW')
@@ -42,7 +36,7 @@ BEGIN
         'IYYY-IW'
       ) AS week_id_col,
       COALESCE(
-        NULLIF(rr.score, 0),
+        rr.score,
         CASE
           WHEN COALESCE(rr.distance, 0)::numeric > 0
             THEN GREATEST(floor(COALESCE(rr.distance, 0)::numeric * 10), 1)
@@ -51,7 +45,7 @@ BEGIN
       ) AS points_col
     FROM public.running_record rr
     JOIN public."user" u ON u.user_id = rr.user_id
-    WHERE rr.start_area_name = v_area
+    WHERE (v_area IS NULL OR rr.start_area_name = v_area)
       AND u.crew_id IS NOT NULL
   ), weekly AS (
     SELECT crew_id_col, SUM(points_col) AS weekly_points
@@ -123,12 +117,6 @@ BEGIN
   PERFORM set_config('search_path', 'public', true);
   v_area := NULLIF(trim(p_area_name), '');
 
-  IF v_area IS NULL THEN
-    RETURN QUERY
-    SELECT * FROM public.get_total_crew_rankings(fetch_limit, fetch_offset);
-    RETURN;
-  END IF;
-
   v_week_id := COALESCE(
     target_week,
     to_char((now() AT TIME ZONE 'Asia/Seoul')::date, 'IYYY-IW')
@@ -143,7 +131,7 @@ BEGIN
         'IYYY-IW'
       ) AS week_id_col,
       COALESCE(
-        NULLIF(rr.score, 0),
+        rr.score,
         CASE
           WHEN COALESCE(rr.distance, 0)::numeric > 0
             THEN GREATEST(floor(COALESCE(rr.distance, 0)::numeric * 10), 1)
@@ -152,7 +140,7 @@ BEGIN
       ) AS points_col
     FROM public.running_record rr
     JOIN public."user" u ON u.user_id = rr.user_id
-    WHERE rr.start_area_name = v_area
+    WHERE (v_area IS NULL OR rr.start_area_name = v_area)
       AND u.crew_id IS NOT NULL
   ), weekly AS (
     SELECT crew_id_col, SUM(points_col) AS weekly_points

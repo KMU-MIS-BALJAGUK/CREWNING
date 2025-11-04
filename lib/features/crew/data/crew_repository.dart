@@ -28,10 +28,13 @@ class CrewRepository {
     String? weekId,
     String? areaName,
   }) async {
+    final trimmedArea = areaName?.trim();
     final response = await _client.rpc(
-      areaName == null ? _weeklyRpc : _weeklyAreaRpc,
+      _weeklyAreaRpc,
       params: {
-        if (areaName != null) 'p_area_name': areaName,
+        'p_area_name': (trimmedArea != null && trimmedArea.isNotEmpty)
+            ? trimmedArea
+            : null,
         if (weekId != null) 'target_week': weekId,
         'fetch_limit': limit,
         'fetch_offset': offset,
@@ -47,14 +50,16 @@ class CrewRepository {
     String? areaName,
     String? weekId,
   }) async {
-    final rpc = areaName == null ? _totalRpc : _totalAreaRpc;
+    final trimmedArea = areaName?.trim();
     final params = <String, dynamic>{
-      if (areaName != null) 'p_area_name': areaName,
-      if (areaName != null && weekId != null) 'target_week': weekId,
+      'p_area_name': (trimmedArea != null && trimmedArea.isNotEmpty)
+          ? trimmedArea
+          : null,
+      if (weekId != null) 'target_week': weekId,
       'fetch_limit': limit,
       'fetch_offset': offset,
     };
-    final response = await _client.rpc(rpc, params: params);
+    final response = await _client.rpc(_totalAreaRpc, params: params);
     final list = (response as List).cast<Map<String, dynamic>>();
     return list.map(mapTotalRanking).toList();
   }

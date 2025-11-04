@@ -55,7 +55,7 @@ class _CrewScreenState extends State<CrewScreen>
     _loadInitial();
   }
 
-  Widget _buildAreaFilter(ThemeData theme) {
+  Widget _buildAreaFilter(BuildContext context, ThemeData theme) {
     final options = _areas ?? const <AreaOption>[];
     final items = <DropdownMenuItem<AreaOption?>>[
       const DropdownMenuItem<AreaOption?>(
@@ -70,40 +70,48 @@ class _CrewScreenState extends State<CrewScreen>
       ),
     ];
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxWidth = screenWidth * 0.55;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      child: Row(
-        children: [
-          Icon(
-            Icons.place_outlined,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<AreaOption?>(
-                isExpanded: true,
-                value: _selectedArea,
-                hint: Text(
-                  _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
-                  style: theme.textTheme.bodyMedium,
-                ),
-                items: items,
-                onChanged: _areasLoading
-                    ? null
-                    : (value) {
-                        _changeArea(value);
-                      },
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: Row(
+            children: [
+              Icon(
+                Icons.place_outlined,
+                color: theme.colorScheme.primary,
               ),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<AreaOption?>(
+                    isExpanded: true,
+                    value: _selectedArea,
+                    hint: Text(
+                      _areasLoading ? '지역 정보를 불러오는 중...' : '전체 지역',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    items: items,
+                    onChanged: _areasLoading
+                        ? null
+                        : (value) {
+                            _changeArea(value);
+                          },
+                  ),
+                ),
+              ),
+              if (_selectedArea != null)
+                IconButton(
+                  tooltip: '지역 초기화',
+                  icon: const Icon(Icons.close),
+                  onPressed: _areasLoading ? null : () => _changeArea(null),
+                ),
+            ],
           ),
-          if (_selectedArea != null)
-            IconButton(
-              tooltip: '지역 초기화',
-              icon: const Icon(Icons.close),
-              onPressed: _areasLoading ? null : () => _changeArea(null),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -208,11 +216,11 @@ class _CrewScreenState extends State<CrewScreen>
     );
   }
 
-  Widget _buildRankingHeader(ThemeData theme) {
+  Widget _buildRankingHeader(BuildContext context, ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildAreaFilter(theme),
+        _buildAreaFilter(context, theme),
         _buildMyCrewCard(),
       ],
     );
@@ -529,7 +537,7 @@ class _CrewScreenState extends State<CrewScreen>
                     ]);
                   },
                   onTapCrew: _openCrewDetail,
-                  header: _buildRankingHeader(theme),
+                  header: _buildRankingHeader(context, theme),
                 ),
                 _RankingTabView(
                   controller: _totalController,
@@ -545,7 +553,7 @@ class _CrewScreenState extends State<CrewScreen>
                     ]);
                   },
                   onTapCrew: _openCrewDetail,
-                  header: _buildRankingHeader(theme),
+                  header: _buildRankingHeader(context, theme),
                 ),
               ],
             ),

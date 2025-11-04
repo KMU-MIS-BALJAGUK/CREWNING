@@ -18,9 +18,16 @@ DECLARE
   v_distance_km numeric;
   v_elapsed_s integer;
   v_points integer;
+  v_base_points numeric;
+  v_score numeric;
   v_new_weekly integer;
   v_new_total integer;
   v_week_id text;
+  v_pace_minutes integer;
+  v_pace_seconds integer;
+  v_total_seconds integer;
+  v_diff_seconds integer;
+  v_pace_multiplier numeric;
 BEGIN
   -- Lock the running record row so concurrent finalizations do not race.
   SELECT * INTO v_record
@@ -65,11 +72,31 @@ BEGIN
     v_elapsed_s := 0;
   END IF;
 
-  -- Simple scoring: 1 point per 100m (minimum 1 if distance is positive).
-  v_points := v_distance_m / 100;
-  IF v_distance_m > 0 AND v_points = 0 THEN
-    v_points := 1;
+  -- Compute score based on distance and pace.
+  v_base_points := 0;
+  v_score := 0;
+  v_points := 0;
+  v_pace_multiplier := 1;
+
+  IF v_distance_m >= 100 THEN
+    v_base_points := v_distance_m::numeric / 100;
+    IF v_record.pace IS NOT NULL THEN
+      v_pace_minutes := floor(v_record.pace)::int;
+      v_pace_seconds := round((v_record.pace - v_pace_minutes) * 100)::int;
+      v_pace_seconds := GREATEST(0, LEAST(59, v_pace_seconds));
+      v_total_seconds := (v_pace_minutes * 60) + v_pace_seconds;
+      v_diff_seconds := 360 - v_total_seconds;
+      v_pace_multiplier := 1 + (v_diff_seconds / 10.0) * 0.1;
+      IF v_pace_multiplier < 0.5 THEN
+        v_pace_multiplier := 0.5;
+      END IF;
+    END IF;
+    v_score := v_base_points * v_pace_multiplier;
+  ELSE
+    v_score := 0;
   END IF;
+
+  v_points := GREATEST(floor(v_score)::int, 0);
 
   -- Update running_record with sanitized values.
   UPDATE public.running_record
@@ -77,7 +104,7 @@ BEGIN
     distance = v_distance_km::real,
     elapsed_seconds = v_elapsed_s,
     end_time = COALESCE(v_record.end_time, now()),
-    score = v_points,
+    score = v_score,
     pace = CASE
       WHEN v_distance_km > 0 THEN ROUND((v_elapsed_s::numeric / 60) / NULLIF(v_distance_km, 0), 2)
       ELSE v_record.pace
@@ -102,7 +129,7 @@ BEGIN
   END IF;
 
   RETURN jsonb_build_object(
-    'points_awarded', v_points,
+    'points_awarded', v_score,
     'distance_m', v_distance_m,
     'elapsed_s', v_elapsed_s,
     'weekly_score', v_new_weekly,

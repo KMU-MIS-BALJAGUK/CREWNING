@@ -15,7 +15,7 @@ class CrewningHome extends StatefulWidget {
 class _CrewningHomeState extends State<CrewningHome> {
   int _selectedIndex = 0;
 
-  static const _titles = ['점령 지도', '러닝', '크루', '마이페이지'];
+  static const _titles = ['크루닝', '러닝', '크루', '마이페이지'];
 
   void _onItemTapped(int index) {
     setState(() {
@@ -45,7 +45,7 @@ class _CrewningHomeState extends State<CrewningHome> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
-            label: '점령 지도',
+            label: '크루닝',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.directions_run_outlined),
