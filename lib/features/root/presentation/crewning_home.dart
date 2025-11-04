@@ -14,6 +14,7 @@ class CrewningHome extends StatefulWidget {
 
 class _CrewningHomeState extends State<CrewningHome> {
   int _selectedIndex = 0;
+  final ValueNotifier<int> _runningFocusRequests = ValueNotifier<int>(0);
 
   static const _titles = ['크루닝', '러닝', '크루', '마이페이지'];
 
@@ -21,6 +22,15 @@ class _CrewningHomeState extends State<CrewningHome> {
     setState(() {
       _selectedIndex = index;
     });
+    if (index == 1) {
+      _runningFocusRequests.value += 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _runningFocusRequests.dispose();
+    super.dispose();
   }
 
   @override
@@ -29,11 +39,11 @@ class _CrewningHomeState extends State<CrewningHome> {
       appBar: AppBar(title: Text(_titles[_selectedIndex]), centerTitle: true),
       body: IndexedStack(
         index: _selectedIndex,
-        children: const [
-          StatusScreen(),
-          RunningScreen(),
-          CrewScreen(),
-          MyPageScreen(),
+        children: [
+          const StatusScreen(),
+          RunningScreen(focusRequests: _runningFocusRequests),
+          const CrewScreen(),
+          const MyPageScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(

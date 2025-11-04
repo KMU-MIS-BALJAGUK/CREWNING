@@ -9,6 +9,96 @@ class MyPageScreen extends StatefulWidget {
   State<MyPageScreen> createState() => _MyPageScreenState();
 }
 
+class _PaymentBanner extends StatelessWidget {
+  const _PaymentBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.payments_outlined,
+                  color: theme.colorScheme.primary, size: 24),
+              const SizedBox(width: 10),
+              Text(
+                '주차별 3,900원 출전권',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '준비 중',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '주차별 3,900원 결제로 이번 주 경기 출전권을 준비하세요.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '아직 준비 중인 기능입니다.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary.withOpacity(0.6),
+                foregroundColor: theme.colorScheme.onPrimary,
+                disabledBackgroundColor:
+                    theme.colorScheme.primary.withOpacity(0.4),
+                disabledForegroundColor: theme.colorScheme.onPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('결제 준비 중'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MyPageScreenState extends State<MyPageScreen> {
   bool _loadingProfile = true;
   bool _signingOut = false;
@@ -271,6 +361,8 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   ),
                 ),
               ),
+            const SizedBox(height: 24),
+            const _PaymentBanner(),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _signingOut ? null : _handleSignOut,
