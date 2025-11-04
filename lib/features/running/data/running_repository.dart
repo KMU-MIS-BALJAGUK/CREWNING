@@ -42,7 +42,7 @@ class RunningRepository {
     final data = await _client
         .from('running_record')
         .select(
-          'record_id, user_id, distance, calories, pace, elapsed_seconds, start_time, end_time, path',
+          'record_id, user_id, distance, calories, pace, elapsed_seconds, start_time, end_time, path, score, start_area_name',
         )
         .eq('user_id', userId)
         .order('start_time', ascending: false);
