@@ -476,6 +476,7 @@ class _CrewScreenState extends State<CrewScreen>
       repository: _repository,
       crewId: crewId,
       crewName: crewName,
+      viewerHasCrew: _myCrewSummary != null,
       initialArea: _selectedArea,
       areas: _areas,
     );

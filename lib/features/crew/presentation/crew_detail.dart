@@ -10,6 +10,7 @@ Future<bool?> showCrewDetailDialog(
   required CrewRepository repository,
   required int crewId,
   required String crewName,
+  required bool viewerHasCrew,
   AreaOption? initialArea,
   List<AreaOption>? areas,
 }) {
@@ -25,6 +26,7 @@ Future<bool?> showCrewDetailDialog(
           repository: repository,
           crewId: crewId,
           crewName: crewName,
+          viewerHasCrew: viewerHasCrew,
           initialArea: initialArea,
           areas: areas,
         ),
@@ -38,6 +40,7 @@ class _CrewDetailContent extends StatefulWidget {
     required this.repository,
     required this.crewId,
     required this.crewName,
+    required this.viewerHasCrew,
     this.initialArea,
     this.areas,
   });
@@ -45,6 +48,7 @@ class _CrewDetailContent extends StatefulWidget {
   final CrewRepository repository;
   final int crewId;
   final String crewName;
+  final bool viewerHasCrew;
   final AreaOption? initialArea;
   final List<AreaOption>? areas;
 
@@ -385,6 +389,22 @@ class _CrewDetailContentState extends State<_CrewDetailContent> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                             ),
                             onPressed: () async {
+                              if (widget.viewerHasCrew) {
+                                await showDialog<void>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('신청 불가'),
+                                    content: const Text('이미 크루에 소속되어 있습니다.'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(ctx).pop(),
+                                        child: const Text('확인'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                return;
+                              }
                               // 가입 신청 모달 표시
                               final msg = await showDialog<String?>(
                                 context: context,
@@ -509,6 +529,27 @@ class _CrewMemberTile extends StatelessWidget {
                         member.userName,
                         style: theme.textTheme.titleMedium,
                       ),
+                      if (member.isMyself == true)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.secondary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              '나',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ),
                       if (member.isLeader)
                         Padding(
                           padding: const EdgeInsets.only(left: 6),
@@ -672,10 +713,10 @@ class _ApplyCrewDialogState extends State<_ApplyCrewDialog> {
       content: TextField(
         controller: _controller,
         decoration: const InputDecoration(
-          labelText: '신청글 작성 (선택)',
+          labelText: '신청글 (필수 - 최대 30자)',
         ),
         maxLines: 3,
-        maxLength: 50,
+        maxLength: 30,
       ),
       actions: [
         TextButton(
